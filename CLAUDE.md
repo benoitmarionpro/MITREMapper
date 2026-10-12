@@ -17,7 +17,7 @@ Le LLM fait le gros du travail ; l'utilisateur relit et corrige. Les IDs ATT&CK 
 ## Structure
 | Fichier | Rôle |
 |---|---|
-| `index.html`, `css/style.css` | Coquille, thème clair/sombre |
+| `index.html`, `css/style.css` | Coquille, charte Wavestone (tokens repris de l'outil Mythos Readiness Assessment, thème clair uniquement) |
 | `js/app.js` | Onglets (Scénarios, Règles, Couverture, Paramètres), chargement ATT&CK |
 | `js/store.js` | État du projet ↔ localStorage, import/export JSON (les `settings` ne sont jamais exportés/écrasés) |
 | `js/llm.js` | Adaptateurs `chat`, `listModels`, `parseJson` tolérant, `chatJson` (1 retry) |
