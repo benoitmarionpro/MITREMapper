@@ -46,7 +46,7 @@ Coller ou charger des règles (Sigma, KQL, SPL, texte de documentation…). Sép
 
 ## 4. Couverture
 
-- **Matrice ATT&CK** : intensité selon la meilleure confiance, nombre de règles entre parenthèses, liseré rouge = technique présente dans un scénario.
+- **Matrice ATT&CK** : vert = couvert, ambre = partiel, rouge = trou (technique d'un scénario sans règle), barre colorée à gauche = technique présente dans un scénario, ×n = nombre de règles. Les en-têtes de tactiques restent visibles au défilement et affichent « couvertes/total » pour les scénarios. Recherche par ID ou nom, filtre par scénario, filtre par statut (techniques des scénarios, trous, couvertes). Un clic sur une technique ouvre un volet avec ses règles, ses scénarios et ses sous-techniques ; Échap le ferme.
 - **Couverture par scénario** : couvert (règle de confiance ≥ medium sur la technique ou l'une de ses sous-techniques), partiel (confiance faible, ou seule la technique parente est couverte), trou.
 - **Trous priorisés** par priorité de scénario.
 - **Exports** : couche ATT&CK Navigator (JSON), CSV des règles.
