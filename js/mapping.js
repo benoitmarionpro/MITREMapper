@@ -1,4 +1,4 @@
-import { state, save, uid } from './store.js';
+import { state, save, uid, sample } from './store.js';
 import { chatJson } from './llm.js';
 import { validate, promptCatalog } from './attack.js';
 import { esc, $, readFiles, run } from './ui.js';
@@ -29,7 +29,7 @@ export function render(root) {
   root.innerHTML = `
   <h2>Importer des règles</h2>
   <textarea id="paste" placeholder="Coller des règles ou de la documentation. Séparer plusieurs règles par une ligne --- (YAML Sigma multi-documents OK)."></textarea>
-  <div class="bar"><button id="addp">Ajouter le texte collé</button>
+  <div class="bar"><button id="demo">Charger les règles d'exemple</button><button id="addp">Ajouter le texte collé</button>
     <label style="margin:0">Ou fichiers <input id="files" type="file" multiple style="width:auto" accept=".yml,.yaml,.json,.txt,.md,.kql,.spl,.csv"></label>
     <span class="mut">Un fichier = une ou plusieurs règles (séparateur ---) ; un .json contenant un tableau = une règle par élément.</span></div>
   <div class="bar"><button id="map" class="pri">Mapper les règles non traitées</button><button id="remap">Tout remapper</button><span id="st"></span></div>
@@ -56,6 +56,7 @@ export function render(root) {
     save();
   };
   rows.onclick = e => { if (e.target.dataset.del !== undefined) { state.rules = state.rules.filter(x => x.id !== e.target.closest('tr').dataset.id); save(); draw(); } };
+  $(root, '#demo').onclick = async () => { state.rules.push(...splitRules('exemple.yml', await sample('rules.yml'))); save(); draw(); };
   $(root, '#addp').onclick = () => { const t = $(root, '#paste'); state.rules.push(...splitRules('collé', t.value)); t.value = ''; save(); draw(); };
   $(root, '#files').onchange = async e => {
     for (const f of await readFiles(e.target.files)) state.rules.push(...(f.name.endsWith('.json') ? fromJson(f.name, f.text) : splitRules(f.name, f.text)));

@@ -27,7 +27,7 @@ Le LLM fait le gros du travail ; l'utilisateur relit et corrige. Les IDs ATT&CK 
 | `js/ui.js` | Helpers (`esc`, `run` avec annulation, lecture de fichiers) |
 | `data/attack.json` | Référentiel ATT&CK Enterprise compact, **généré** |
 | `tools/build-attack.mjs` | Régénère `data/attack.json` depuis le STIX officiel (`node tools/build-attack.mjs`) |
-| `data/sample/` | CTI et règles Sigma d'exemple |
+| `data/sample/` | CTI, règles Sigma et `project.json` (démo complète déjà mappée, chargée par `loadDemo()` dans `store.js`) |
 | `test.html` | Asserts minimaux (parse JSON, validation d'IDs) : ouvrir via le serveur local |
 
 ## Modèle de données

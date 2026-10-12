@@ -1,4 +1,4 @@
-import { state, save, uid } from './store.js';
+import { state, save, uid, sample } from './store.js';
 import { chatJson } from './llm.js';
 import { validate, promptCatalog } from './attack.js';
 import { esc, $, readFiles, run } from './ui.js';
@@ -19,7 +19,7 @@ export function render(root) {
   <h2>Sources CTI (rapports, tendances)</h2>
   <textarea id="cti" placeholder="Coller le texte des rapports de menace…"></textarea>
   <div class="bar"><label style="margin:0">Ajouter des fichiers texte <input id="files" type="file" multiple accept=".txt,.md,.json,.csv,.html" style="width:auto"></label>
-    <button id="gen" class="pri">Générer les scénarios</button><label style="margin:0"><input id="repl" type="checkbox" style="width:auto"> remplacer l'existant</label><span id="st"></span></div>
+    <button id="demo">Charger l'exemple</button><button id="gen" class="pri">Générer les scénarios</button><label style="margin:0"><input id="repl" type="checkbox" style="width:auto"> remplacer l'existant</label><span id="st"></span></div>
   <h2>Scénarios (<span id="n"></span>)</h2><div id="list"></div><button id="add">+ Scénario manuel</button>`;
   for (const k of Object.keys(c)) { const el = $(root, '#' + k); el.value = c[k]; el.onchange = () => { c[k] = el.value; save(); }; }
   const cti = $(root, '#cti'); cti.value = state.cti; cti.onchange = () => { state.cti = cti.value; save(); };
@@ -28,6 +28,10 @@ export function render(root) {
     cti.onchange();
   };
 
+  $(root, '#demo').onclick = async () => {
+    Object.assign(c, { sector: 'Santé (hôpitaux)', size: 'ETI, 3 000 employés', country: 'France / Europe', assets: 'SI hospitalier, serveurs ESXi, dossiers patients' });
+    state.cti = await sample('cti.txt'); save(); render(root);
+  };
   const list = $(root, '#list');
   const draw = () => {
     $(root, '#n').textContent = state.scenarios.length;

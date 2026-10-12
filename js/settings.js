@@ -1,4 +1,4 @@
-import { state, save, exportJson, importProject, projectForExport } from './store.js';
+import { state, save, exportJson, importProject, projectForExport, loadDemo } from './store.js';
 import { PRESETS, listModels, chat } from './llm.js';
 import { esc, $ } from './ui.js';
 export function render(root) {
@@ -19,7 +19,8 @@ export function render(root) {
   <h2>Stratégie de détection</h2>
   <label>Étapes (une par ligne)</label><textarea id="stages" style="min-height:5rem"></textarea>
   <h2>Projet</h2>
-  <div class="bar"><button id="exp">Exporter le projet (JSON)</button><label style="margin:0">Importer <input id="imp" type="file" accept=".json" style="width:auto"></label><button id="reset">Tout effacer</button></div>`;
+  <div class="bar"><button id="exp">Exporter le projet (JSON)</button><label style="margin:0">Importer <input id="imp" type="file" accept=".json" style="width:auto"></label><button id="reset">Tout effacer</button></div>
+  <div class="bar"><button id="demo" class="pri">Charger la démo complète (sans LLM)</button><span class="mut">Scénarios et règles d'exemple déjà mappés : prêt pour la matrice en un clic.</span></div>`;
   const f = { prov: 'provider', proto: 'protocol', base: 'base', key: 'key', model: 'model', temp: 'temperature', batch: 'batch' };
   const fill = () => { for (const [id, k] of Object.entries(f)) $(root, '#' + id).value = s[k]; $(root, '#stages').value = s.stages.join('\n'); };
   fill();
@@ -41,5 +42,9 @@ export function render(root) {
   };
   $(root, '#exp').onclick = () => exportJson('mitremapper-projet.json', projectForExport());
   $(root, '#imp').onchange = async e => { try { importProject(await e.target.files[0].text()); alert('Projet importé'); } catch (x) { alert(x.message); } };
+  $(root, '#demo').onclick = async () => {
+    if ((state.scenarios.length || state.rules.length) && !confirm('Remplacer les scénarios et règles actuels par la démo ?')) return;
+    try { await loadDemo(); alert('Démo chargée : voir Scénarios, Règles et Couverture.'); } catch (x) { alert(x.message); }
+  };
   $(root, '#reset').onclick = () => { if (confirm('Effacer scénarios, règles et CTI ?')) { state.scenarios = []; state.rules = []; state.cti = ''; save(); } };
 }

@@ -1,0 +1,369 @@
+{
+ "client": {
+  "sector": "Santé (hôpitaux)",
+  "size": "ETI 3000 employés",
+  "country": "France / Europe",
+  "assets": "SI hospitalier, ESXi, dossiers patients"
+ },
+ "cti": "Rapport de menace (exemple) - Secteur santé, Europe\n\nLes opérateurs de ransomware ciblent les hôpitaux et groupes de cliniques. L'accès initial est obtenu par spearphishing avec pièces jointes (macros, ISO/LNK) ou par exploitation de VPN/pare-feux exposés non patchés. Les attaquants utilisent des comptes valides achetés auprès d'initial access brokers.\nAprès l'accès : exécution PowerShell, déploiement de Cobalt Strike, dump LSASS (Mimikatz), Kerberoasting, mouvement latéral via RDP et PsExec/SMB, désactivation de l'EDR et suppression des shadow copies (vssadmin), exfiltration vers du stockage cloud (Rclone/MEGA) avant chiffrement des serveurs ESXi et des partages de fichiers.\nPar ailleurs, des campagnes d'espionnage étatique visent la recherche médicale : compromission de la chaîne d'approvisionnement logicielle, web shells sur serveurs Exchange exposés, persistance par tâches planifiées et exfiltration lente par HTTPS.\n",
+ "scenarios": [
+  {
+   "name": "Ransomware via spearphishing avec pièce jointe malveillante",
+   "actors": "Opérateurs de ransomware ciblant le secteur santé",
+   "summary": "Compromission initiale par email de phishing contenant document à macro ou fichier ISO/LNK, suivie d'un chargement de payload, vol d'identifiants, mouvement latéral puis chiffrement des serveurs et partages hospitaliers.",
+   "techniques": [
+    "T1566.001",
+    "T1204.002",
+    "T1059.001",
+    "T1105",
+    "T1003.001",
+    "T1558.003",
+    "T1021.001",
+    "T1021.002",
+    "T1685",
+    "T1490",
+    "T1486"
+   ],
+   "priority": "high",
+   "rationale": "Vecteur explicitement observé contre les hôpitaux européens. Impact critique sur la disponibilité des dossiers patients et de l'activité de soins.",
+   "id": "vkkwclf",
+   "rejected": []
+  },
+  {
+   "name": "Exploitation de VPN ou pare-feu exposé menant à un ransomware",
+   "actors": "Opérateurs de ransomware",
+   "summary": "Exploitation d'un équipement exposé non corrigé pour obtenir un accès initial, déployer Cobalt Strike, se propager dans le domaine puis chiffrer l'infrastructure.",
+   "techniques": [
+    "T1190",
+    "T1078",
+    "T1059.001",
+    "T1046",
+    "T1087.002",
+    "T1003.001",
+    "T1021.001",
+    "T1570",
+    "T1685",
+    "T1490",
+    "T1486"
+   ],
+   "priority": "high",
+   "rationale": "Les équipements exposés sont cités comme vecteur fréquent. Les hôpitaux possèdent souvent de nombreux accès distants critiques.",
+   "id": "lijlu94",
+   "rejected": []
+  },
+  {
+   "name": "Utilisation de comptes valides achetés auprès d'Initial Access Brokers",
+   "actors": "Ransomware-as-a-Service (RaaS)",
+   "summary": "Connexion avec des comptes déjà compromis, exploration de l'environnement, élévation de privilèges et préparation d'une attaque d'extorsion double.",
+   "techniques": [
+    "T1078",
+    "T1133",
+    "T1087.002",
+    "T1069.002",
+    "T1482",
+    "T1003.001",
+    "T1550",
+    "T1021.001",
+    "T1567.002",
+    "T1486"
+   ],
+   "priority": "high",
+   "rationale": "Le rapport indique explicitement l'usage de comptes achetés. Les identités privilégiées donnent rapidement accès aux SI hospitaliers.",
+   "id": "2xe2f60",
+   "rejected": []
+  },
+  {
+   "name": "Double extorsion avec exfiltration vers stockage cloud",
+   "actors": "Groupes de ransomware",
+   "summary": "Collecte des dossiers patients et données sensibles avant chiffrement, avec exfiltration via services cloud de type Rclone ou MEGA.",
+   "techniques": [
+    "T1039",
+    "T1213",
+    "T1005",
+    "T1074.001",
+    "T1560.001",
+    "T1020",
+    "T1567.002",
+    "T1041",
+    "T1486"
+   ],
+   "priority": "high",
+   "rationale": "Les dossiers patients représentent une cible à forte valeur et un risque réglementaire élevé au regard du contexte hospitalier.",
+   "id": "fkcufn8",
+   "rejected": []
+  },
+  {
+   "name": "Chiffrement des hyperviseurs ESXi",
+   "actors": "Opérateurs de ransomware",
+   "summary": "Après compromission de l'environnement, les attaquants ciblent les serveurs ESXi afin d'interrompre massivement les services cliniques virtualisés.",
+   "techniques": [
+    "T1078",
+    "T1018",
+    "T1673",
+    "T1675",
+    "T1489",
+    "T1490",
+    "T1486",
+    "T1529"
+   ],
+   "priority": "high",
+   "rationale": "Les actifs ESXi sont explicitement mentionnés dans le profil client et dans le rapport de menace. Impact opérationnel maximal.",
+   "id": "510znye",
+   "rejected": []
+  },
+  {
+   "name": "Compromission d'Exchange exposé avec web shell",
+   "actors": "Groupes d'espionnage étatique",
+   "summary": "Exploitation d'un serveur Exchange exposé, déploiement d'un web shell, collecte d'informations stratégiques puis exfiltration discrète.",
+   "techniques": [
+    "T1190",
+    "T1505.003",
+    "T1059.001",
+    "T1114.001",
+    "T1083",
+    "T1213",
+    "T1053.005",
+    "T1071.001",
+    "T1041"
+   ],
+   "priority": "medium",
+   "rationale": "Le rapport mentionne spécifiquement ce mode opératoire dans les campagnes d'espionnage visant la recherche médicale.",
+   "id": "xkw0c4h",
+   "rejected": []
+  },
+  {
+   "name": "Espionnage de la recherche médicale via chaîne d'approvisionnement logicielle",
+   "actors": "Acteurs étatiques",
+   "summary": "Introduction d'un composant logiciel compromis dans l'environnement hospitalier afin de maintenir un accès durable et d'exfiltrer les données de recherche.",
+   "techniques": [
+    "T1195",
+    "T1105",
+    "T1059.001",
+    "T1053.005",
+    "T1082",
+    "T1083",
+    "T1213",
+    "T1071.001",
+    "T1573",
+    "T1041"
+   ],
+   "priority": "medium",
+   "rationale": "Moins probable que le ransomware mais pertinent pour les établissements impliqués dans la recherche ou les essais cliniques.",
+   "id": "nm9bew3",
+   "rejected": []
+  },
+  {
+   "name": "Persistance discrète par tâches planifiées et exfiltration HTTPS lente",
+   "actors": "Groupes d'espionnage étatique",
+   "summary": "Maintien d'accès durable sur plusieurs mois grâce à des tâches planifiées et extraction progressive de données via HTTPS afin d'éviter la détection.",
+   "techniques": [
+    "T1053.005",
+    "T1083",
+    "T1005",
+    "T1074.001",
+    "T1029",
+    "T1071.001",
+    "T1573",
+    "T1041"
+   ],
+   "priority": "medium",
+   "rationale": "TTP explicitement décrit. Risque élevé pour la confidentialité mais impact opérationnel plus limité qu'un ransomware.",
+   "id": "2d69mj8",
+   "rejected": []
+  },
+  {
+   "name": "Mouvement latéral par PsExec et SMB à partir d'un poste compromis",
+   "actors": "Ransomware et acteurs opportunistes",
+   "summary": "Après compromission initiale d'un poste utilisateur, propagation rapide vers les serveurs et partages réseau du domaine hospitalier.",
+   "techniques": [
+    "T1566.001",
+    "T1204.002",
+    "T1059.001",
+    "T1087.002",
+    "T1135",
+    "T1021.002",
+    "T1570",
+    "T1039",
+    "T1486"
+   ],
+   "priority": "medium",
+   "rationale": "Très fréquent dans les intrusions ransomware et fortement dépendant de la segmentation interne.",
+   "id": "g4seqvc",
+   "rejected": []
+  },
+  {
+   "name": "Vol d'identifiants AD par LSASS et Kerberoasting",
+   "actors": "Ransomware et groupes d'intrusion avancée",
+   "summary": "Acquisition d'identifiants privilégiés via LSASS et tickets Kerberos afin de compromettre le domaine hospitalier.",
+   "techniques": [
+    "T1059.001",
+    "T1003.001",
+    "T1558.003",
+    "T1087.002",
+    "T1069.002",
+    "T1482",
+    "T1550",
+    "T1021.001"
+   ],
+   "priority": "medium",
+   "rationale": "Étape récurrente des campagnes décrites. Détection utile pour casser la chaîne d'attaque avant l'impact final.",
+   "id": "r7235f5",
+   "rejected": []
+  },
+  {
+   "name": "Désactivation des outils de sécurité avant impact",
+   "actors": "Opérateurs de ransomware",
+   "summary": "Neutralisation de l'EDR et suppression des traces afin d'accroître les chances de réussite du chiffrement et de l'exfiltration.",
+   "techniques": [
+    "T1059.001",
+    "T1518",
+    "T1685",
+    "T1112",
+    "T1070",
+    "T1490",
+    "T1564.001",
+    "T1486"
+   ],
+   "priority": "low",
+   "rationale": "Activité généralement observée en phase avancée. Forte valeur de détection mais moins discriminante comme scénario autonome.",
+   "id": "9c72kba",
+   "rejected": []
+  }
+ ],
+ "rules": [
+  {
+   "id": "6bf9s27",
+   "source": "collé",
+   "body": "title: Suspicious PowerShell Encoded Command\nlogsource: {product: windows, category: process_creation}\ndetection:\n  selection: {Image|endswith: '\\powershell.exe', CommandLine|contains: ['-enc ', '-EncodedCommand']}\n  condition: selection",
+   "name": "Suspicious PowerShell Encoded Command",
+   "techniques": [
+    "T1059.001"
+   ],
+   "scenarios": [
+    "vkkwclf",
+    "lijlu94",
+    "xkw0c4h",
+    "nm9bew3",
+    "g4seqvc",
+    "r7235f5",
+    "9c72kba"
+   ],
+   "stage": "Détection",
+   "confidence": "high",
+   "mapped": true,
+   "rejected": [],
+   "note": "Détection directe de l'exécution PowerShell avec commande encodée (-enc/-EncodedCommand). Cible spécifiquement PowerShell."
+  },
+  {
+   "id": "lmp0qsr",
+   "source": "collé",
+   "body": "title: LSASS Memory Access by Non-System Process\nlogsource: {product: windows, category: process_access}\ndetection:\n  selection: {TargetImage|endswith: '\\lsass.exe', GrantedAccess|contains: ['0x1010', '0x1410']}\n  condition: selection",
+   "name": "LSASS Memory Access by Non-System Process",
+   "techniques": [
+    "T1003.001"
+   ],
+   "scenarios": [
+    "vkkwclf",
+    "lijlu94",
+    "2xe2f60",
+    "r7235f5"
+   ],
+   "stage": "Détection",
+   "confidence": "high",
+   "mapped": true,
+   "rejected": [],
+   "note": "Accès mémoire à lsass.exe par un processus non système, fortement corrélé au credential dumping LSASS."
+  },
+  {
+   "id": "mnay8hh",
+   "source": "collé",
+   "body": "title: Shadow Copies Deletion via Vssadmin\nlogsource: {product: windows, category: process_creation}\ndetection:\n  selection: {Image|endswith: '\\vssadmin.exe', CommandLine|contains|all: ['delete', 'shadows']}\n  condition: selection",
+   "name": "Shadow Copies Deletion via Vssadmin",
+   "techniques": [
+    "T1490"
+   ],
+   "scenarios": [
+    "vkkwclf",
+    "lijlu94",
+    "510znye",
+    "9c72kba"
+   ],
+   "stage": "Détection",
+   "confidence": "high",
+   "mapped": true,
+   "rejected": [],
+   "note": "Suppression des clichés instantanés via vssadmin, comportement classique d'inhibition de la récupération système."
+  },
+  {
+   "id": "in9qi0r",
+   "source": "collé",
+   "body": "title: PsExec Service Installation\nlogsource: {product: windows, service: system}\ndetection:\n  selection: {EventID: 7045, ServiceName: 'PSEXESVC'}\n  condition: selection",
+   "name": "PsExec Service Installation",
+   "techniques": [
+    "T1021.002"
+   ],
+   "scenarios": [
+    "g4seqvc"
+   ],
+   "stage": "Détection",
+   "confidence": "high",
+   "mapped": true,
+   "rejected": [],
+   "note": "Installation du service PSEXESVC caractéristique de PsExec pour exécution distante via SMB/Windows Admin Shares."
+  },
+  {
+   "id": "ju1gjkd",
+   "source": "collé",
+   "body": "title: Office Application Spawning Script Interpreter\nlogsource: {product: windows, category: process_creation}\ndetection:\n  selection: {ParentImage|endswith: ['\\winword.exe', '\\excel.exe'], Image|endswith: ['\\cmd.exe', '\\powershell.exe', '\\wscript.exe']}\n  condition: selection",
+   "name": "Office Application Spawning Script Interpreter",
+   "techniques": [
+    "T1204.002"
+   ],
+   "scenarios": [
+    "vkkwclf",
+    "g4seqvc"
+   ],
+   "stage": "Détection",
+   "confidence": "medium",
+   "mapped": true,
+   "rejected": [],
+   "note": "Application Office lançant un interpréteur de commandes ou de scripts. Indique une exécution déclenchée depuis un document utilisateur, sans identifier précisément le script exécuté."
+  },
+  {
+   "id": "pfo69g9",
+   "source": "collé",
+   "body": "title: Rclone Execution with Remote Config\nlogsource: {product: windows, category: process_creation}\ndetection:\n  selection: {CommandLine|contains: ['rclone', ' copy ', ' sync ']}\n  condition: selection",
+   "name": "Rclone Execution with Remote Config",
+   "techniques": [
+    "T1567.002"
+   ],
+   "scenarios": [
+    "2xe2f60",
+    "fkcufn8"
+   ],
+   "stage": "Détection",
+   "confidence": "medium",
+   "mapped": true,
+   "rejected": [],
+   "note": "Rclone est fréquemment utilisé pour transférer des données vers des services de stockage cloud. La règle détecte l'outil mais pas nécessairement l'exfiltration effective."
+  },
+  {
+   "id": "7fgcn3n",
+   "source": "collé",
+   "body": "title: Kerberoasting - Multiple TGS Requests with RC4\nlogsource: {product: windows, service: security}\ndetection:\n  selection: {EventID: 4769, TicketEncryptionType: '0x17'}\n  condition: selection | count(ServiceName) by IpAddress > 10",
+   "name": "Kerberoasting - Multiple TGS Requests with RC4",
+   "techniques": [
+    "T1558.003"
+   ],
+   "scenarios": [
+    "vkkwclf",
+    "r7235f5"
+   ],
+   "stage": "Détection",
+   "confidence": "high",
+   "mapped": true,
+   "rejected": [],
+   "note": "Multiples requêtes TGS RC4 (4769) vers différents SPN, détection classique d'activité Kerberoasting."
+  }
+ ]
+}

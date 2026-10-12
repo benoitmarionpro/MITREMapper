@@ -59,7 +59,13 @@ Le projet est enregistré automatiquement dans le navigateur. Paramètres → **
 
 ## Essayer
 
-Dans `data/sample/` : `cti.txt` (à coller dans Scénarios) et `rules.yml` (à importer dans Règles).
+Pour une démo rapide :
+
+- **Paramètres → Charger la démo complète (sans LLM)**, ou le bouton équivalent sur l'écran Couverture vide : 11 scénarios et 7 règles déjà mappés, la matrice s'affiche immédiatement. Remplace les scénarios et règles en cours ; vos réglages LLM sont conservés.
+- **Scénarios → Charger l'exemple** : remplit le profil client et le rapport CTI d'exemple ; il reste à cliquer sur Générer.
+- **Règles → Charger les règles d'exemple** : ajoute 7 règles Sigma ; il reste à cliquer sur Mapper.
+
+Les fichiers sont dans `data/sample/` (`cti.txt`, `rules.yml`, `project.json`).
 
 ## Mettre à jour le référentiel ATT&CK
 

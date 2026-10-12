@@ -1,4 +1,4 @@
-import { state, exportJson } from './store.js';
+import { state, exportJson, loadDemo } from './store.js';
 import { attack, parentOf } from './attack.js';
 import { esc, $ } from './ui.js';
 
@@ -44,7 +44,7 @@ export function render(root) {
   const gapRows = [...gaps].sort((a, b) => a[1].p - b[1].p || b[1].scs.length - a[1].scs.length)
     .map(([id, g]) => `<tr><td>${id} ${esc(attack.techniques.find(t => t.id === id)?.name)}</td><td class="${status(cm, id)}">${LABEL[status(cm, id)]}</td><td>${g.scs.map(esc).join(', ')}</td></tr>`).join('');
 
-  root.innerHTML = `
+  root.innerHTML = `${state.rules.length || state.scenarios.length ? '' : '<div class="card"><b>Aucune donnée.</b> Génère des scénarios et mappe des règles, ou <button id="demo" class="pri">charge la démo complète</button></div>'}
   <div class="bar"><button id="nav">Exporter couche ATT&CK Navigator</button><button id="csv">Exporter CSV (règles)</button>
     <span class="mut">${state.rules.length} règles · ${state.scenarios.length} scénarios · ${total} techniques de scénario</span></div>
   <h2>Matrice ATT&CK</h2>
@@ -100,6 +100,7 @@ export function render(root) {
   $(root, '#detail').onclick = e => { if (e.target.classList.contains('x')) e.currentTarget.classList.remove('open'); };
   root.onkeydown = e => { if (e.key === 'Escape') $(root, '#detail').classList.remove('open'); };
   drawMatrix();
+  const demo = $(root, '#demo'); if (demo) demo.onclick = async () => { await loadDemo(); render(root); };
 
   $(root, '#nav').onclick = () => exportJson('mitremapper-layer.json', {
     name: 'MITREMapper coverage', versions: { layer: '4.5', navigator: '5.1.0', attack: String(attack.version).split('.')[0] }, domain: 'enterprise-attack',
