@@ -1,5 +1,7 @@
 # MITREMapper
 
+**Accès en ligne : <https://benoitmarionpro.github.io/MITREMapper/>**
+
 Outil web local pour passer de la **veille CTI** à une **matrice de couverture de détection** :
 
 1. des rapports de menace + le profil du client → **scénarios de menace** à couvrir ;
@@ -23,7 +25,7 @@ Choisir un fournisseur ; l'URL et le modèle se pré-remplissent :
 
 | Fournisseur | Protocole | URL par défaut |
 |---|---|---|
-| Local / proxy Copilot | OpenAI | `http://127.0.0.1:11434/v1` |
+| Local (proxy compatible OpenAI) | OpenAI | `http://127.0.0.1:11434/v1` |
 | OpenAI | OpenAI | `https://api.openai.com/v1` |
 | Anthropic | Anthropic | `https://api.anthropic.com` |
 | Ollama | OpenAI | `http://localhost:11434/v1` |
