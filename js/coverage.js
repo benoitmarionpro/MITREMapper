@@ -12,12 +12,11 @@ function coverageMap() {
   }
   return m;
 }
-/** Statut d'une technique de scénario : cov (règle medium+), part (low, ou seule la parente/une sous-technique), gap. */
+/** Statut d'une technique de scénario : cov (règle medium+ sur elle ou l'une de ses sous-techniques), part (confiance low, ou seule la technique parente est couverte), gap. */
 function status(cm, id) {
   const e = cm.get(id);
-  if (!e) return 'gap';
-  const exact = state.rules.some(r => r.techniques.includes(id));
-  return exact && e.best >= 2 ? 'cov' : 'part';
+  if (e) return e.best >= 2 ? 'cov' : 'part';
+  return id.includes('.') && state.rules.some(r => r.techniques.includes(parentOf(id))) ? 'part' : 'gap';
 }
 const LABEL = { cov: 'couvert', part: 'partiel', gap: 'trou' };
 

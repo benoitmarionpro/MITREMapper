@@ -47,7 +47,7 @@ Coller ou charger des règles (Sigma, KQL, SPL, texte de documentation…). Sép
 ## 4. Couverture
 
 - **Matrice ATT&CK** : intensité selon la meilleure confiance, nombre de règles entre parenthèses, liseré rouge = technique présente dans un scénario.
-- **Couverture par scénario** : couvert (règle de confiance ≥ medium sur la technique exacte), partiel (confiance faible, ou seule la technique parente / une sous-technique est couverte), trou.
+- **Couverture par scénario** : couvert (règle de confiance ≥ medium sur la technique ou l'une de ses sous-techniques), partiel (confiance faible, ou seule la technique parente est couverte), trou.
 - **Trous priorisés** par priorité de scénario.
 - **Exports** : couche ATT&CK Navigator (JSON), CSV des règles.
 

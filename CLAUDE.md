@@ -33,7 +33,7 @@ Le LLM fait le gros du travail ; l'utilisateur relit et corrige. Les IDs ATT&CK 
 ## Modèle de données
 `{client, cti, scenarios[{id,name,priority,techniques[],summary,actors}], rules[{id,name,source,body,techniques[],scenarios[ids],stage,confidence,note,mapped}], settings}`
 
-Règle de couverture (`coverage.js`) : une technique de scénario est *couverte* si une règle la cite exactement avec confiance ≥ medium, *partielle* si seule une règle `low`, la parente ou une sous-technique la couvre, sinon *trou*. Une règle sur une sous-technique compte aussi pour sa parente dans la matrice.
+Règle de couverture (`coverage.js`) : une technique de scénario est *couverte* si une règle de confiance ≥ medium la cite ou cite l'une de ses sous-techniques, *partielle* si seule une règle `low` la couvre ou si seule sa technique parente est couverte, sinon *trou*. Une règle sur une sous-technique compte aussi pour sa parente dans la matrice.
 
 ## Conventions
 - Interface et prompts en français. Les noms de techniques restent ceux de MITRE.

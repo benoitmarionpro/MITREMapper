@@ -5,7 +5,7 @@ import { esc, $, readFiles, run } from './ui.js';
 
 const SYSTEM = `Tu es un analyste CTI senior. À partir du profil client et des extraits de rapports de menace, tu déduis les scénarios de menace les plus pertinents à couvrir en détection.
 Réponds en JSON : {"scenarios":[{"name":"","actors":"","summary":"","techniques":["T1566.001"],"priority":"high|medium|low","rationale":""}]}
-Règles : 5 à 15 scénarios, concrets et distincts ; techniques = IDs ATT&CK Enterprise existants (techniques ou sous-techniques), 4 à 12 par scénario, ordonnées selon la kill chain ; priority selon la probabilité et l'impact pour CE client.
+Règles : rédige tout en français ; 5 à 15 scénarios, concrets et distincts ; techniques = IDs ATT&CK Enterprise existants (techniques ou sous-techniques), 4 à 12 par scénario, ordonnées selon la kill chain ; priority selon la probabilité et l'impact pour CE client ; répartis les priorités (au plus la moitié en high) ; préfère les sous-techniques précises quand la source les justifie.
 Techniques parentes de référence :\n`;
 
 export function render(root) {

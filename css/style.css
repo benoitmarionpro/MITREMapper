@@ -46,6 +46,7 @@ table{border-collapse:collapse;width:100%;background:var(--surface);border:1px s
 th{font:600 11px Inter,sans-serif;text-transform:uppercase;letter-spacing:.04em;color:var(--mut);background:var(--ink-50)}
 th,td{border-bottom:1px solid var(--line);padding:.5rem .7rem;text-align:left;vertical-align:top}
 td input,td select{min-height:30px;padding:.15rem .4rem}
+td select{min-width:7.5rem}td input[type=checkbox]{width:auto}td label{display:inline-block;white-space:nowrap;margin:0 .4rem 0 0;font-weight:500}
 .tag{display:inline-block;padding:2px 8px;border-radius:4px;background:var(--indigo-50);color:var(--indigo-800);font-size:11px;font-weight:500;margin:1px}
 .tag.cov{background:var(--green-50);color:var(--green-700)}.tag.part{background:var(--amber-bg);color:#8A4800}.tag.gap{background:var(--red-bg);color:#a02a29}
 .matrix{display:flex;gap:6px;overflow-x:auto;align-items:flex-start;padding-bottom:.5rem}
