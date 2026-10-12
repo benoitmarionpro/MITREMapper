@@ -74,3 +74,4 @@ td select{min-width:7.5rem}td input[type=checkbox]{width:auto}td label{display:i
 @media(prefers-reduced-motion:reduce){#detail{transition:none}}
 .gap{color:var(--red)}.part{color:#8A4800}.cov{color:var(--green-700)}
 @media(max-width:700px){header{padding:0 1rem;flex-wrap:wrap;height:auto;padding-block:.5rem}main{padding:1rem}}
+.sref{font-size:12px;background:var(--indigo-600);color:#fff;margin:0 0 .3rem}

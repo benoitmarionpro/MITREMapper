@@ -41,7 +41,7 @@ export function render(root) {
     rows.innerHTML = state.rules.map(r => `<tr data-id="${r.id}">
       <td title="${esc(r.body.slice(0, 500))}"><b>${esc(r.name)}</b><div class="mut">${esc(r.source)}</div></td>
       <td><input data-k="techniques" value="${esc(r.techniques.join(', '))}" size="18">${r.rejected?.length ? `<div class="err">rejetés : ${esc(r.rejected.join(', '))}</div>` : ''}</td>
-      <td>${state.scenarios.map((s, k) => `<label style="display:inline;margin:0"><input type="checkbox" data-k="sc" value="${s.id}" style="width:auto" ${r.scenarios.includes(s.id) ? 'checked' : ''}>S${k + 1}</label> `).join('')}</td>
+      <td>${state.scenarios.map((s, k) => `<label title="${esc(s.name)}"><input type="checkbox" data-k="sc" value="${s.id}" style="width:auto" ${r.scenarios.includes(s.id) ? 'checked' : ''}>S${k + 1}</label> `).join('')}</td>
       <td><select data-k="stage"><option></option>${stages.map(x => `<option ${x === r.stage ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></td>
       <td><select data-k="confidence">${['', 'high', 'medium', 'low'].map(x => `<option ${x === r.confidence ? 'selected' : ''}>${x}</option>`).join('')}</select></td>
       <td class="mut">${esc(r.note || '')}</td><td><button data-del>×</button></td></tr>`).join('');

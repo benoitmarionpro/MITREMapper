@@ -31,7 +31,7 @@ export function render(root) {
   const list = $(root, '#list');
   const draw = () => {
     $(root, '#n').textContent = state.scenarios.length;
-    list.innerHTML = state.scenarios.map(s => `<div class="card" data-id="${s.id}">
+    list.innerHTML = state.scenarios.map((s, k) => `<div class="card" data-id="${s.id}"><b class="tag sref">S${k + 1}</b>
       <div class="row"><div><label>Nom</label><input data-k="name" value="${esc(s.name)}"></div>
       <div><label>Priorité</label><select data-k="priority">${['high', 'medium', 'low'].map(p => `<option ${p === s.priority ? 'selected' : ''}>${p}</option>`).join('')}</select></div>
       <div><label>Techniques (IDs, séparés par des virgules)</label><input data-k="techniques" value="${esc(s.techniques.join(', '))}"></div></div>
