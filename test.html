@@ -1,0 +1,14 @@
+<!doctype html>
+<meta charset="utf-8"><title>tests</title>
+<pre id="o"></pre>
+<script type="module">
+import { parseJson } from './js/llm.js';
+import { loadAttack, validate } from './js/attack.js';
+await loadAttack();
+const t = (n, c) => o.textContent += `${c ? 'OK  ' : 'FAIL'} ${n}\n`;
+t('json fence', parseJson('Voici:\n```json\n{"a":[1]}\n```\nfin').a[0] === 1);
+t('json array', parseJson('x [1,2] y').length === 2);
+const v = validate(['t1059.001', 'T9999', 'T1059.001']);
+t('validate ok dedup + case', v.ok.length === 1 && v.ok[0] === 'T1059.001');
+t('validate rejects', v.rejected[0] === 'T9999');
+</script>

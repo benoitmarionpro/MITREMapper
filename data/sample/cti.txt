@@ -1,0 +1,5 @@
+Rapport de menace (exemple) - Secteur santé, Europe
+
+Les opérateurs de ransomware ciblent les hôpitaux et groupes de cliniques. L'accès initial est obtenu par spearphishing avec pièces jointes (macros, ISO/LNK) ou par exploitation de VPN/pare-feux exposés non patchés. Les attaquants utilisent des comptes valides achetés auprès d'initial access brokers.
+Après l'accès : exécution PowerShell, déploiement de Cobalt Strike, dump LSASS (Mimikatz), Kerberoasting, mouvement latéral via RDP et PsExec/SMB, désactivation de l'EDR et suppression des shadow copies (vssadmin), exfiltration vers du stockage cloud (Rclone/MEGA) avant chiffrement des serveurs ESXi et des partages de fichiers.
+Par ailleurs, des campagnes d'espionnage étatique visent la recherche médicale : compromission de la chaîne d'approvisionnement logicielle, web shells sur serveurs Exchange exposés, persistance par tâches planifiées et exfiltration lente par HTTPS.

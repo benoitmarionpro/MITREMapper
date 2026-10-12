@@ -1,0 +1,41 @@
+title: Suspicious PowerShell Encoded Command
+logsource: {product: windows, category: process_creation}
+detection:
+  selection: {Image|endswith: '\powershell.exe', CommandLine|contains: ['-enc ', '-EncodedCommand']}
+  condition: selection
+---
+title: LSASS Memory Access by Non-System Process
+logsource: {product: windows, category: process_access}
+detection:
+  selection: {TargetImage|endswith: '\lsass.exe', GrantedAccess|contains: ['0x1010', '0x1410']}
+  condition: selection
+---
+title: Shadow Copies Deletion via Vssadmin
+logsource: {product: windows, category: process_creation}
+detection:
+  selection: {Image|endswith: '\vssadmin.exe', CommandLine|contains|all: ['delete', 'shadows']}
+  condition: selection
+---
+title: PsExec Service Installation
+logsource: {product: windows, service: system}
+detection:
+  selection: {EventID: 7045, ServiceName: 'PSEXESVC'}
+  condition: selection
+---
+title: Office Application Spawning Script Interpreter
+logsource: {product: windows, category: process_creation}
+detection:
+  selection: {ParentImage|endswith: ['\winword.exe', '\excel.exe'], Image|endswith: ['\cmd.exe', '\powershell.exe', '\wscript.exe']}
+  condition: selection
+---
+title: Rclone Execution with Remote Config
+logsource: {product: windows, category: process_creation}
+detection:
+  selection: {CommandLine|contains: ['rclone', ' copy ', ' sync ']}
+  condition: selection
+---
+title: Kerberoasting - Multiple TGS Requests with RC4
+logsource: {product: windows, service: security}
+detection:
+  selection: {EventID: 4769, TicketEncryptionType: '0x17'}
+  condition: selection | count(ServiceName) by IpAddress > 10
