@@ -29,20 +29,20 @@ export function render(root) {
   const kind = (t, rel) => { const e = cm.get(t.id); return e ? (e.best >= 2 ? 'cov' : 'part') : rel.has(t.id) ? 'gap' : 'none'; };
 
   const total = new Set(state.scenarios.flatMap(s => s.techniques)).size;
-  const rowsHtml = state.scenarios.map(s => {
+  const rowsHtml = state.scenarios.map((s, k) => {
     const st = s.techniques.map(id => [id, status(cm, id)]);
-    const c = k => st.filter(x => x[1] === k).length;
-    return `<tr><td><b>${esc(s.name)}</b> <span class="tag">${esc(s.priority)}</span></td>
+    const c = x => st.filter(y => y[1] === x).length;
+    return `<tr><td><b class="tag sref">S${k + 1}</b> <b>${esc(s.name)}</b> <span class="tag">${esc(s.priority)}</span></td>
       <td>${s.techniques.length ? Math.round(100 * c('cov') / s.techniques.length) : 0}% <span class="mut">(${c('cov')} couvertes, ${c('part')} partielles, ${c('gap')} trous)</span></td>
       <td>${st.map(([id, k]) => `<span class="tag ${k}" title="${esc(attack.techniques.find(t => t.id === id)?.name)}">${id}</span>`).join('')}</td></tr>`;
   }).join('');
 
   const prio = { high: 0, medium: 1, low: 2 }, gaps = new Map();
-  for (const s of state.scenarios) for (const id of s.techniques) if (status(cm, id) !== 'cov') {
-    const g = gaps.get(id) || { scs: [], p: 3 }; g.scs.push(s.name); g.p = Math.min(g.p, prio[s.priority] ?? 1); gaps.set(id, g);
-  }
+  state.scenarios.forEach((s, k) => { for (const id of s.techniques) if (status(cm, id) !== 'cov') {
+    const g = gaps.get(id) || { scs: [], p: 3 }; g.scs.push({ ref: `S${k + 1}`, name: s.name }); g.p = Math.min(g.p, prio[s.priority] ?? 1); gaps.set(id, g);
+  } });
   const gapRows = [...gaps].sort((a, b) => a[1].p - b[1].p || b[1].scs.length - a[1].scs.length)
-    .map(([id, g]) => `<tr><td>${id} ${esc(attack.techniques.find(t => t.id === id)?.name)}</td><td class="${status(cm, id)}">${LABEL[status(cm, id)]}</td><td>${g.scs.map(esc).join(', ')}</td></tr>`).join('');
+    .map(([id, g]) => `<tr><td>${id} ${esc(attack.techniques.find(t => t.id === id)?.name)}</td><td class="${status(cm, id)}">${LABEL[status(cm, id)]}</td><td>${g.scs.map(x => `<div><span class="tag sref">${x.ref}</span> ${esc(x.name)}</div>`).join('')}</td></tr>`).join('');
 
   root.innerHTML = `${state.rules.length || state.scenarios.length ? '' : '<div class="card"><b>Aucune donnée.</b> Génère des scénarios et mappe des règles, ou <button id="demo" class="pri">charge la démo complète</button></div>'}
   <div class="bar"><button id="nav">Exporter couche ATT&CK Navigator</button><button id="csv">Exporter CSV (règles)</button>
