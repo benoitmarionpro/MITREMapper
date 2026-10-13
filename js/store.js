@@ -22,6 +22,6 @@ export function importProject(text) {
 }
 export const projectForExport = () => ({ ...state, settings: undefined });
 /** Charge un fichier de data/sample/ (démos rapides). */
-export const sample = f => fetch('data/sample/' + f).then(r => { if (!r.ok) throw new Error('Exemple introuvable : ' + f); return r.text(); });
+export const sample = f => fetch('data/sample/' + f, { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error('Exemple introuvable : ' + f); return r.text(); });
 /** Démo complète sans LLM : scénarios + règles déjà mappées. Remplace les données du projet. */
 export const loadDemo = async () => importProject(await sample('project.json'));

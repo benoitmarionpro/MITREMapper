@@ -4,6 +4,7 @@
 <script type="module">
 import { parseJson } from './js/llm.js';
 import { loadAttack, validate } from './js/attack.js';
+import { linkState } from './js/mapping.js';
 await loadAttack();
 const t = (n, c) => o.textContent += `${c ? 'OK  ' : 'FAIL'} ${n}\n`;
 t('json fence', parseJson('Voici:\n```json\n{"a":[1]}\n```\nfin').a[0] === 1);
@@ -11,4 +12,9 @@ t('json array', parseJson('x [1,2] y').length === 2);
 const v = validate(['t1059.001', 'T9999', 'T1059.001']);
 t('validate ok dedup + case', v.ok.length === 1 && v.ok[0] === 'T1059.001');
 t('validate rejects', v.rejected[0] === 'T9999');
+const S = { id: 's1', techniques: ['T1059', 'T1003.001'] };
+t('linkState ok (sous-technique vs parent)', linkState({ techniques: ['T1059.001'], scenarios: ['s1'] }, S) === 'ok');
+t('linkState suspect', linkState({ techniques: ['T1490'], scenarios: ['s1'] }, S) === 'suspect');
+t('linkState miss', linkState({ techniques: ['T1003.002'], scenarios: [] }, S) === 'miss');
+t('linkState vide', linkState({ techniques: ['T1490'], scenarios: [] }, S) === '');
 </script>

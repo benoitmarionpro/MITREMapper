@@ -31,7 +31,9 @@ Le LLM fait le gros du travail ; l'utilisateur relit et corrige. Les IDs ATT&CK 
 | `test.html` | Asserts minimaux (parse JSON, validation d'IDs) : ouvrir via le serveur local |
 
 ## Modèle de données
-`{client, cti, scenarios[{id,name,priority,techniques[],summary,actors}], rules[{id,name,source,body,techniques[],scenarios[ids],stage,confidence,note,mapped}], settings}`
+`{client, cti, scenarios[{id,name,priority,techniques[],summary,actors}], rules[{id,name,source,body,techniques[],scenarios[ids],why{scenarioId:phrase},reviewed,stage,confidence,note,mapped}], settings}`
+
+Revue du mapping (`mapping.js`) : `linkState(règle, scénario)` → `ok` (lié, technique commune au niveau parent), `suspect` (lié sans technique commune), `miss` (non lié mais technique commune). `why` et `reviewed` sont optionnels (projets anciens compatibles).
 
 Règle de couverture (`coverage.js`) : une technique de scénario est *couverte* si une règle de confiance ≥ medium la cite ou cite l'une de ses sous-techniques, *partielle* si seule une règle `low` la couvre ou si seule sa technique parente est couverte, sinon *trou*. Une règle sur une sous-technique compte aussi pour sa parente dans la matrice.
 

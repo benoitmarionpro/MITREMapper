@@ -252,7 +252,17 @@
    "confidence": "high",
    "mapped": true,
    "rejected": [],
-   "note": "Détection directe de l'exécution PowerShell avec commande encodée (-enc/-EncodedCommand). Cible spécifiquement PowerShell."
+   "note": "Règle centrée sur PowerShell encodé; elle ne permet pas d'inférer d'autres techniques spécifiques.",
+   "reviewed": false,
+   "why": {
+    "vkkwclf": "détecte l'exécution PowerShell encodée utilisée après l'ouverture de la pièce jointe malveillante.",
+    "lijlu94": "détecte l'exécution PowerShell souvent utilisée après compromission initiale d'un équipement exposé.",
+    "xkw0c4h": "détecte l'exécution PowerShell pouvant être lancée depuis un web shell Exchange.",
+    "nm9bew3": "détecte l'étape d'exécution PowerShell utilisée par une charge malveillante issue de la chaîne logistique.",
+    "g4seqvc": "détecte l'exécution PowerShell sur un poste déjà compromis avant le mouvement latéral.",
+    "r7235f5": "détecte les commandes PowerShell fréquemment utilisées pour préparer des opérations de vol d'identifiants.",
+    "9c72kba": "détecte l'utilisation de PowerShell pour désactiver ou modifier des mécanismes de sécurité."
+   }
   },
   {
    "id": "lmp0qsr",
@@ -272,7 +282,14 @@
    "confidence": "high",
    "mapped": true,
    "rejected": [],
-   "note": "Accès mémoire à lsass.exe par un processus non système, fortement corrélé au credential dumping LSASS."
+   "note": "Accès mémoire LSASS avec droits typiquement utilisés pour le dumping de secrets.",
+   "reviewed": false,
+   "why": {
+    "vkkwclf": "détecte un accès mémoire à LSASS correspondant à une tentative de récupération d'identifiants.",
+    "lijlu94": "détecte le credential dumping utilisé après compromission initiale.",
+    "2xe2f60": "détecte une tentative de collecte d'identifiants supplémentaires via LSASS.",
+    "r7235f5": "détecte directement l'étape de vol d'identifiants AD via LSASS."
+   }
   },
   {
    "id": "mnay8hh",
@@ -292,7 +309,14 @@
    "confidence": "high",
    "mapped": true,
    "rejected": [],
-   "note": "Suppression des clichés instantanés via vssadmin, comportement classique d'inhibition de la récupération système."
+   "note": "La règle cible précisément la suppression des shadow copies.",
+   "reviewed": false,
+   "why": {
+    "vkkwclf": "détecte la suppression des clichés VSS afin d'empêcher la restauration avant chiffrement.",
+    "lijlu94": "détecte l'inhibition des mécanismes de récupération avant impact ransomware.",
+    "510znye": "détecte une étape de préparation à l'impact visant à empêcher la récupération.",
+    "9c72kba": "détecte une action de défense impairment par suppression des copies de sauvegarde locales."
+   }
   },
   {
    "id": "in9qi0r",
@@ -309,7 +333,11 @@
    "confidence": "high",
    "mapped": true,
    "rejected": [],
-   "note": "Installation du service PSEXESVC caractéristique de PsExec pour exécution distante via SMB/Windows Admin Shares."
+   "note": "Détection spécifique de PsExec; ne prouve pas à elle seule un transfert d'outil (T1570).",
+   "reviewed": false,
+   "why": {
+    "g4seqvc": "détecte l'installation du service PsExec utilisé pour l'exécution distante via SMB."
+   }
   },
   {
    "id": "ju1gjkd",
@@ -317,7 +345,11 @@
    "body": "title: Office Application Spawning Script Interpreter\nlogsource: {product: windows, category: process_creation}\ndetection:\n  selection: {ParentImage|endswith: ['\\winword.exe', '\\excel.exe'], Image|endswith: ['\\cmd.exe', '\\powershell.exe', '\\wscript.exe']}\n  condition: selection",
    "name": "Office Application Spawning Script Interpreter",
    "techniques": [
-    "T1204.002"
+    "T1204.002",
+    "T1059.001",
+    "T1059.003",
+    "T1059.005",
+    "T1059.007"
    ],
    "scenarios": [
     "vkkwclf",
@@ -327,7 +359,12 @@
    "confidence": "medium",
    "mapped": true,
    "rejected": [],
-   "note": "Application Office lançant un interpréteur de commandes ou de scripts. Indique une exécution déclenchée depuis un document utilisateur, sans identifier précisément le script exécuté."
+   "note": "La relation parent Office → script interpreter indique une exécution issue d'un document Office mais ne distingue pas précisément macro, DDE ou autre mécanisme.",
+   "reviewed": false,
+   "why": {
+    "vkkwclf": "détecte l'exécution d'un interpréteur de commandes lancée depuis une application Office après interaction utilisateur.",
+    "g4seqvc": "détecte l'étape initiale d'exécution malveillante provenant d'un document Office."
+   }
   },
   {
    "id": "pfo69g9",
@@ -345,7 +382,12 @@
    "confidence": "medium",
    "mapped": true,
    "rejected": [],
-   "note": "Rclone est fréquemment utilisé pour transférer des données vers des services de stockage cloud. La règle détecte l'outil mais pas nécessairement l'exfiltration effective."
+   "note": "La présence de Rclone copy/sync suggère fortement une exfiltration cloud mais ne confirme pas le contenu transféré.",
+   "reviewed": false,
+   "why": {
+    "2xe2f60": "détecte un transfert potentiel de données vers un service de stockage cloud via Rclone.",
+    "fkcufn8": "détecte l'étape d'exfiltration vers un stockage cloud utilisée lors d'une double extorsion."
+   }
   },
   {
    "id": "7fgcn3n",
@@ -363,7 +405,12 @@
    "confidence": "high",
    "mapped": true,
    "rejected": [],
-   "note": "Multiples requêtes TGS RC4 (4769) vers différents SPN, détection classique d'activité Kerberoasting."
+   "note": "Multiples demandes TGS RC4 constituent un indicateur robuste de Kerberoasting.",
+   "reviewed": false,
+   "why": {
+    "vkkwclf": "détecte des requêtes TGS RC4 en volume compatibles avec une activité de Kerberoasting.",
+    "r7235f5": "détecte directement l'étape Kerberoasting de collecte de tickets de service."
+   }
   }
  ]
 }

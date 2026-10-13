@@ -44,7 +44,15 @@ Renseigner le profil client (secteur, taille, zones, actifs clés), coller ou ch
 
 ## 3. Règles
 
-Coller ou charger des règles (Sigma, KQL, SPL, texte de documentation…). Séparer plusieurs règles par une ligne `---`. Un fichier `.json` contenant un tableau donne une règle par élément. Cliquer **Mapper les règles non traitées** : pour chaque règle, techniques, scénarios liés, étape et confiance (high / medium / low) sont proposés par lots, puis corrigeables à la main.
+Coller ou charger des règles (Sigma, KQL, SPL, texte de documentation…). Séparer plusieurs règles par une ligne `---`. Un fichier `.json` contenant un tableau donne une règle par élément. Cliquer **Mapper les règles non traitées** : pour chaque règle, techniques, scénarios liés (avec une phrase de justification), étape et confiance (high / medium / low) sont proposés par lots.
+
+La **revue du mapping** est une matrice règles × scénarios (S1…Sn, nom au survol) :
+
+- **●** lien cohérent (la règle a au moins une technique en commun avec le scénario) ; **⚠** lien sans technique commune, à challenger ; **◌** non lié mais technique en commun, oubli possible.
+- Un clic sur une cellule lie ou délie ; un clic sur l'en-tête Sk met la colonne en évidence et remonte les règles liées.
+- Le pied de matrice donne, par scénario, le nombre de règles liées et le nombre de techniques sans règle liée (un scénario à 0 règle est en rouge).
+- Filtres : à relire, suspects, oublis possibles, sans scénario, trop larges (liée à plus de la moitié des scénarios), confiance basse ; recherche par nom ou technique.
+- Un clic sur une règle ouvre le détail : code complet, justification de chaque lien, oublis possibles, ajout/retrait de techniques (les IDs inconnus sont rejetés), confiance, étape. Cocher **Validée** pour suivre l'avancement de la relecture (compteur n/m).
 
 ## 4. Couverture
 
