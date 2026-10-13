@@ -1,7 +1,7 @@
-export let attack = null;
+export const attack = { version: '', tactics: [], techniques: [] }; // objet partagé, rempli par loadAttack()
 const byId = new Map();
 export async function loadAttack() {
-  attack = await (await fetch('data/attack.json')).json();
+  Object.assign(attack, globalThis.__ATTACK__ ?? await (await fetch('data/attack.json')).json()); // __ATTACK__ : version fichier unique
   attack.techniques.forEach(t => byId.set(t.id, t));
   return attack;
 }

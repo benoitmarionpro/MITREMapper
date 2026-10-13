@@ -1,7 +1,7 @@
 import { state, save, uid, sample } from './store.js';
 import { chatJson } from './llm.js';
 import { validate, promptCatalog } from './attack.js';
-import { esc, $, readFiles, run } from './ui.js';
+import { esc, $, readFiles, run, gateAI } from './ui.js';
 
 const SYSTEM = `Tu es un analyste CTI senior. À partir du profil client et des extraits de rapports de menace, tu déduis les scénarios de menace les plus pertinents à couvrir en détection.
 Réponds en JSON : {"scenarios":[{"name":"","actors":"","summary":"","techniques":["T1566.001"],"priority":"high|medium|low","rationale":""}]}
@@ -21,6 +21,7 @@ export function render(root) {
   <div class="bar"><label style="margin:0">Ajouter des fichiers texte <input id="files" type="file" multiple accept=".txt,.md,.json,.csv,.html" style="width:auto"></label>
     <button id="demo">Charger l'exemple</button><button id="gen" class="pri">Générer les scénarios</button><label style="margin:0"><input id="repl" type="checkbox" style="width:auto"> remplacer l'existant</label><span id="st"></span></div>
   <h2>Scénarios (<span id="n"></span>)</h2><div id="list"></div><button id="add">+ Scénario manuel</button>`;
+  gateAI(root, ['#gen'], '#st');
   for (const k of Object.keys(c)) { const el = $(root, '#' + k); el.value = c[k]; el.onchange = () => { c[k] = el.value; save(); }; }
   const cti = $(root, '#cti'); cti.value = state.cti; cti.onchange = () => { state.cti = cti.value; save(); };
   $(root, '#files').onchange = async e => {

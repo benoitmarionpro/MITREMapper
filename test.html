@@ -5,6 +5,9 @@
 import { parseJson } from './js/llm.js';
 import { loadAttack, validate } from './js/attack.js';
 import { linkState } from './js/mapping.js';
+import { config, redact } from './js/llm.js';
+import { setAuthorized, setKey, getKey, clearKeys, isAuthorized } from './js/keys.js';
+import { state } from './js/store.js';
 await loadAttack();
 const t = (n, c) => o.textContent += `${c ? 'OK  ' : 'FAIL'} ${n}\n`;
 t('json fence', parseJson('Voici:\n```json\n{"a":[1]}\n```\nfin').a[0] === 1);
@@ -17,4 +20,36 @@ t('linkState ok (sous-technique vs parent)', linkState({ techniques: ['T1059.001
 t('linkState suspect', linkState({ techniques: ['T1490'], scenarios: ['s1'] }, S) === 'suspect');
 t('linkState miss', linkState({ techniques: ['T1003.002'], scenarios: [] }, S) === 'miss');
 t('linkState vide', linkState({ techniques: ['T1490'], scenarios: [] }, S) === '');
+// --- CYBAIMaker : approbation, clés, validation de configuration ---
+const code = f => { try { f(); return 'ok'; } catch (e) { return e.code; } };
+const set = o => Object.assign(state.settings, { provider: 'local', base: 'http://127.0.0.1:11434/v1', model: 'auto', deployment: '', apiVersion: '2024-10-21' }, o);
+clearKeys(); setAuthorized(false); set({});
+t('refus tant que non autorisé', code(() => config('generate')) === 'not_authorized');
+setAuthorized(true);
+t('local http loopback accepté sans clé', code(() => config('generate')) === 'ok');
+set({ provider: 'openai', base: 'https://api.openai.com/v1', model: 'gpt-4o' });
+t('clé manquante (openai)', code(() => config('generate')) === 'missing_key');
+setKey('openai', 'sk-test-SECRET-1234');
+t('clé présente → ok', code(() => config('generate')) === 'ok');
+t('clé par fournisseur (pas partagée)', getKey('anthropic') === '');
+set({ provider: 'openai', base: 'http://api.example.com/v1', model: 'gpt-4o' });
+t('HTTP distant refusé', code(() => config('generate')) === 'insecure_url');
+set({ provider: 'openai', base: 'pas une url', model: 'gpt-4o' });
+t('URL invalide', code(() => config('generate')) === 'bad_url');
+set({ provider: 'openai', base: 'https://api.openai.com/v1', model: '' });
+t('modèle manquant', code(() => config('generate')) === 'missing_model');
+t('modèle non exigé pour lister', code(() => config('models')) === 'ok');
+set({ provider: 'openai', base: ' https://x.example.com/v1/chat/completions/ ', model: 'm' });
+t('URL de base normalisée', config('generate').base === 'https://x.example.com/v1');
+setKey('azure', 'azure-key-9999'); set({ provider: 'azure', base: 'https://r.openai.azure.com', model: '' });
+t('azure : déploiement manquant', code(() => config('generate')) === 'missing_deployment');
+set({ provider: 'azure', base: 'https://r.openai.azure.com', deployment: 'gpt4o' });
+t('azure ok avec déploiement', code(() => config('generate')) === 'ok');
+t('redact clé + Bearer', !/SECRET|abc123/.test(redact('erreur sk-test-SECRET-1234 et Bearer abc123xyz', 'sk-test-SECRET-1234')));
+set({ provider: 'openai', base: 'https://api.openai.com/v1', model: 'm' });
+try { setKey('openai', ''); config('test'); } catch (e) { t('erreur contextualisée (op, fournisseur), sans secret', /test · OpenAI/.test(e.message) && e.provider === 'openai' && e.op === 'test'); }
+setKey('openai', 'k-in-session'); t('clé en sessionStorage, pas en localStorage', !!sessionStorage.getItem('mitremapper.keys') && !(localStorage.getItem('mitremapper.keys') || '').includes('k-in-session'));
+t('aucune clé dans les données projet', !JSON.stringify(state).includes('k-in-session'));
+clearKeys(); setAuthorized(false);
+t('clés effacées', getKey('openai') === '' && !isAuthorized());
 </script>

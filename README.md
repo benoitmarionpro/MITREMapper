@@ -12,30 +12,35 @@ L'IA propose, vous validez. Tout tourne dans votre navigateur : pas de serveur, 
 
 ## Démarrage
 
-```
-python -m http.server 8000
-```
-Puis ouvrir <http://localhost:8000>. (Ne pas ouvrir `index.html` directement : les modules JS exigent un serveur HTTP.)
-
-N'importe quel hébergement statique convient aussi (GitHub Pages, nginx…).
+- **Sans serveur (fichier unique)** : ouvrir `dist/mitremapper.html` par double-clic dans un navigateur. Rien à installer. Le fichier est régénéré par `node tools/build-standalone.mjs` (outil de développement, non requis pour l'utiliser).
+- **Dossier statique** : `python -m http.server 8000` puis <http://localhost:8000> (ou n'importe quel hébergement statique : GitHub Pages, nginx…). Ouvrir `index.html` directement ne fonctionne pas, les modules JS exigent HTTP : utiliser le fichier unique dans ce cas.
 
 ## 1. Configurer le LLM (onglet Paramètres)
 
-Choisir un fournisseur ; l'URL et le modèle se pré-remplissent :
+**Autorisation obligatoire.** Cocher d'abord « I confirm that AI use is authorized for this content and complies with the client's rules. » Tant qu'elle n'est pas cochée, aucun appel IA n'est envoyé (génération, mapping, liste des modèles, test) et les boutons correspondants sont désactivés. Elle est à reconfirmer à chaque session.
 
-| Fournisseur | Protocole | URL par défaut |
+Choisir ensuite un fournisseur ; les champs, l'URL et le modèle s'adaptent :
+
+| Fournisseur | Champs | URL par défaut |
 |---|---|---|
-| Local (proxy compatible OpenAI) | OpenAI | `http://127.0.0.1:11434/v1` |
-| OpenAI | OpenAI | `https://api.openai.com/v1` |
-| Anthropic | Anthropic | `https://api.anthropic.com` |
-| Ollama | OpenAI | `http://localhost:11434/v1` |
-| Mistral, OpenRouter, autre | OpenAI | à renseigner |
+| Local / proxy compatible OpenAI | URL, modèle, clé optionnelle | `http://127.0.0.1:11434/v1` |
+| OpenAI | URL, modèle, clé | `https://api.openai.com/v1` |
+| Anthropic | URL, modèle, clé | `https://api.anthropic.com` |
+| Mistral | URL, modèle, clé | `https://api.mistral.ai/v1` |
+| Azure OpenAI / AI Foundry | endpoint HTTPS, déploiement, version d'API, clé | à renseigner |
+| Ollama Cloud | URL, modèle, clé | `https://ollama.com/v1` (à vérifier selon votre compte) |
+| Ollama (local), OpenRouter | URL, modèle, clé | préremplie |
+| Endpoint générique compatible OpenAI | URL, modèle, clé optionnelle | à renseigner |
 
-Renseigner la clé API si nécessaire, puis **Lister les modèles** et **Tester la connexion**.
+La liste des modèles se charge automatiquement quand c'est possible ; sinon une liste de secours du fournisseur est proposée, avec la raison de l'échec. **Tester la connexion** vérifie endpoint, clé et modèle ; la pastille d'état indique : non testé, en cours, OK, liste de secours, erreur.
 
-- Tout service compatible OpenAI (LM Studio, Groq, Azure…) fonctionne via « Personnalisé ».
-- La clé est stockée **en clair dans le navigateur** et envoyée uniquement à l'URL configurée.
-- Le serveur LLM doit autoriser CORS pour votre origine (ex. `http://localhost:8000`). Pour Ollama : variable d'environnement `OLLAMA_ORIGINS`.
+### Sécurité et clés API
+
+- La clé est stockée **séparément du projet**, en mémoire de session par défaut (effacée à la fermeture de l'onglet), une clé par fournisseur. « Mémoriser cette clé sur ce navigateur » la conserve en `localStorage`, « Effacer les clés API » supprime tout.
+- Elle n'est jamais exportée (projet JSON, couche Navigator, CSV), jamais enregistrée avec les données du projet ni affichée en entier. Une clé enregistrée par une ancienne version est migrée automatiquement.
+- Avant chaque appel : autorisation, fournisseur, modèle, clé, URL valide et **HTTPS exigé** (HTTP accepté seulement pour `127.0.0.1` / `localhost`).
+- Les erreurs indiquent l'opération, le fournisseur, le modèle, le statut HTTP et le message du fournisseur, sans secret.
+- **CORS** : le serveur LLM doit autoriser l'origine de l'outil (`http://localhost:8000`, `https://benoitmarionpro.github.io`…). Pour Ollama : variable `OLLAMA_ORIGINS`. Avec le **fichier unique ouvert en double-clic**, l'origine est `null` : le serveur doit l'accepter (ex. proxy local CoPro : ajouter `null` dans Settings, Local API) ; sinon servir le dossier en HTTP.
 - Les étapes de la stratégie de détection (Prévention, Détection, Investigation, Réponse par défaut) sont modifiables.
 
 ## 2. Scénarios

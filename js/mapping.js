@@ -1,7 +1,7 @@
 import { state, save, uid, sample } from './store.js';
 import { chatJson } from './llm.js';
 import { attack, tech, validate, parentOf, promptCatalog } from './attack.js';
-import { esc, $, readFiles, run } from './ui.js';
+import { esc, $, readFiles, run, gateAI } from './ui.js';
 
 const SYSTEM = (stages, scenarios) => `Tu es un ingénieur detection engineering. Pour chaque règle de détection (Sigma, KQL, SPL, EDR, ou simple documentation), tu identifies les techniques ATT&CK Enterprise qu'elle détecte réellement (pas celles simplement liées au contexte).
 Réponds en JSON : {"results":[{"i":0,"techniques":["T1059.001"],"scenarios":[{"s":"S1","why":"une phrase"}],"stage":"","confidence":"high|medium|low","note":""}]}
@@ -59,6 +59,7 @@ export function render(root) {
   <div class="mwrap"><table class="rm"><thead id="head"></thead><tbody id="rows"></tbody><tfoot id="foot"></tfoot></table></div>
   <aside id="detail" aria-live="polite"></aside><datalist id="techlist">${attack.techniques.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</datalist>`;
 
+  gateAI(root, ['#map', '#remap'], '#st');
   const sc = () => state.scenarios, rule = id => state.rules.find(r => r.id === id);
   const chips = (ids, rm) => ids.map(t => `<span class="tag" title="${esc(tech(t)?.name || '')}">${t}${rm ? `<button class="rmt" data-rmt="${t}" aria-label="Retirer ${t}">×</button>` : ''}</span>`).join('');
 
