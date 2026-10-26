@@ -51,12 +51,16 @@ Renseigner le profil client (secteur, taille, zones, actifs clés), coller ou ch
 
 Coller ou charger des règles (Sigma, KQL, SPL, texte de documentation…). Séparer plusieurs règles par une ligne `---`. Un fichier `.json` contenant un tableau donne une règle par élément. Cliquer **Mapper les règles non traitées** : pour chaque règle, techniques, scénarios liés (avec une phrase de justification), étape et confiance (high / medium / low) sont proposés par lots.
 
+**Mapping sans IA d'abord.** Les règles qui déclarent leurs techniques (tags Sigma `attack.t1059.001`, champs MITRE des exports Sentinel, Splunk, Elastic…) sont mappées localement : techniques lues dans la règle et validées contre ATT&CK, scénarios liés automatiquement s'ils partagent une technique (justification « Lien automatique »). Seules les règles sans tag partent vers l'IA ; sans autorisation IA, le mapping des règles taguées fonctionne quand même. La colonne Règle indique l'origine (*via tags* / *via IA*).
+
+Option **« Faire aussi relire par l'IA les règles qui ont des tags »** : l'IA lit la logique de la règle indépendamment des tags ; les différences (au niveau technique parente) apparaissent dans le filtre **Écart tags / IA** et dans le détail, avec un bouton **Utiliser les tags**. Exemple dans la démo : la règle PsExec est taguée T1569.002 (exécution de service) alors que l'IA y voit T1021.002 (mouvement latéral SMB).
+
 La **revue du mapping** est une matrice règles × scénarios (S1…Sn, nom au survol) :
 
 - **●** lien cohérent (la règle a au moins une technique en commun avec le scénario) ; **⚠** lien sans technique commune, à challenger ; **◌** non lié mais technique en commun, oubli possible.
 - Un clic sur une cellule lie ou délie ; un clic sur l'en-tête Sk met la colonne en évidence et remonte les règles liées.
 - Le pied de matrice donne, par scénario, le nombre de règles liées et le nombre de techniques sans règle liée (un scénario à 0 règle est en rouge).
-- Filtres : à relire, suspects, oublis possibles, sans scénario, trop larges (liée à plus de la moitié des scénarios), confiance basse ; recherche par nom ou technique.
+- Filtres : à relire, suspects, oublis possibles, sans scénario, trop larges (liée à plus de la moitié des scénarios), confiance basse, écart tags / IA ; recherche par nom ou technique.
 - Un clic sur une règle ouvre le détail : code complet, justification de chaque lien, oublis possibles, ajout/retrait de techniques (les IDs inconnus sont rejetés), confiance, étape. Cocher **Validée** pour suivre l'avancement de la relecture (compteur n/m).
 
 ## 4. Couverture
@@ -76,7 +80,7 @@ Pour une démo rapide :
 
 - **Paramètres → Charger la démo complète (sans LLM)**, ou le bouton équivalent sur l'écran Couverture vide : 11 scénarios et 7 règles déjà mappés, la matrice s'affiche immédiatement. Remplace les scénarios et règles en cours ; vos réglages LLM sont conservés.
 - **Scénarios → Charger l'exemple** : remplit le profil client et le rapport CTI d'exemple ; il reste à cliquer sur Générer.
-- **Règles → Charger les règles d'exemple** : ajoute 7 règles Sigma ; il reste à cliquer sur Mapper.
+- **Règles → Charger les règles d'exemple** : ajoute 7 règles Sigma (5 avec tags ATT&CK, mappées sans IA ; 2 sans tag, pour l'IA) ; il reste à cliquer sur Mapper.
 
 Les fichiers sont dans `data/sample/` (`cti.txt`, `rules.yml`, `project.json`).
 

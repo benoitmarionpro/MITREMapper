@@ -233,8 +233,8 @@
  "rules": [
   {
    "id": "6bf9s27",
-   "source": "collé",
-   "body": "title: Suspicious PowerShell Encoded Command\nlogsource: {product: windows, category: process_creation}\ndetection:\n  selection: {Image|endswith: '\\powershell.exe', CommandLine|contains: ['-enc ', '-EncodedCommand']}\n  condition: selection",
+   "source": "exemple.yml",
+   "body": "title: Suspicious PowerShell Encoded Command\r\ntags:\r\n  - attack.execution\r\n  - attack.t1059.001\r\nlogsource: {product: windows, category: process_creation}\r\ndetection:\r\n  selection: {Image|endswith: '\\powershell.exe', CommandLine|contains: ['-enc ', '-EncodedCommand']}\r\n  condition: selection",
    "name": "Suspicious PowerShell Encoded Command",
    "techniques": [
     "T1059.001"
@@ -252,22 +252,27 @@
    "confidence": "high",
    "mapped": true,
    "rejected": [],
-   "note": "Règle centrée sur PowerShell encodé; elle ne permet pas d'inférer d'autres techniques spécifiques.",
+   "note": "Techniques lues dans les tags de la règle (sans IA).",
    "reviewed": false,
    "why": {
-    "vkkwclf": "détecte l'exécution PowerShell encodée utilisée après l'ouverture de la pièce jointe malveillante.",
-    "lijlu94": "détecte l'exécution PowerShell souvent utilisée après compromission initiale d'un équipement exposé.",
-    "xkw0c4h": "détecte l'exécution PowerShell pouvant être lancée depuis un web shell Exchange.",
-    "nm9bew3": "détecte l'étape d'exécution PowerShell utilisée par une charge malveillante issue de la chaîne logistique.",
-    "g4seqvc": "détecte l'exécution PowerShell sur un poste déjà compromis avant le mouvement latéral.",
-    "r7235f5": "détecte les commandes PowerShell fréquemment utilisées pour préparer des opérations de vol d'identifiants.",
-    "9c72kba": "détecte l'utilisation de PowerShell pour désactiver ou modifier des mécanismes de sécurité."
-   }
+    "vkkwclf": "Lien automatique : technique commune T1059.001.",
+    "lijlu94": "Lien automatique : technique commune T1059.001.",
+    "xkw0c4h": "Lien automatique : technique commune T1059.001.",
+    "nm9bew3": "Lien automatique : technique commune T1059.001.",
+    "g4seqvc": "Lien automatique : technique commune T1059.001.",
+    "r7235f5": "Lien automatique : technique commune T1059.001.",
+    "9c72kba": "Lien automatique : technique commune T1059.001."
+   },
+   "tags": [
+    "T1059.001"
+   ],
+   "by": "tags",
+   "tagDiff": null
   },
   {
    "id": "lmp0qsr",
-   "source": "collé",
-   "body": "title: LSASS Memory Access by Non-System Process\nlogsource: {product: windows, category: process_access}\ndetection:\n  selection: {TargetImage|endswith: '\\lsass.exe', GrantedAccess|contains: ['0x1010', '0x1410']}\n  condition: selection",
+   "source": "exemple.yml",
+   "body": "title: LSASS Memory Access by Non-System Process\r\ntags:\r\n  - attack.credential-access\r\n  - attack.t1003.001\r\nlogsource: {product: windows, category: process_access}\r\ndetection:\r\n  selection: {TargetImage|endswith: '\\lsass.exe', GrantedAccess|contains: ['0x1010', '0x1410']}\r\n  condition: selection",
    "name": "LSASS Memory Access by Non-System Process",
    "techniques": [
     "T1003.001"
@@ -282,19 +287,24 @@
    "confidence": "high",
    "mapped": true,
    "rejected": [],
-   "note": "Accès mémoire LSASS avec droits typiquement utilisés pour le dumping de secrets.",
+   "note": "Techniques lues dans les tags de la règle (sans IA).",
    "reviewed": false,
    "why": {
-    "vkkwclf": "détecte un accès mémoire à LSASS correspondant à une tentative de récupération d'identifiants.",
-    "lijlu94": "détecte le credential dumping utilisé après compromission initiale.",
-    "2xe2f60": "détecte une tentative de collecte d'identifiants supplémentaires via LSASS.",
-    "r7235f5": "détecte directement l'étape de vol d'identifiants AD via LSASS."
-   }
+    "vkkwclf": "Lien automatique : technique commune T1003.001.",
+    "lijlu94": "Lien automatique : technique commune T1003.001.",
+    "2xe2f60": "Lien automatique : technique commune T1003.001.",
+    "r7235f5": "Lien automatique : technique commune T1003.001."
+   },
+   "tags": [
+    "T1003.001"
+   ],
+   "by": "tags",
+   "tagDiff": null
   },
   {
    "id": "mnay8hh",
-   "source": "collé",
-   "body": "title: Shadow Copies Deletion via Vssadmin\nlogsource: {product: windows, category: process_creation}\ndetection:\n  selection: {Image|endswith: '\\vssadmin.exe', CommandLine|contains|all: ['delete', 'shadows']}\n  condition: selection",
+   "source": "exemple.yml",
+   "body": "title: Shadow Copies Deletion via Vssadmin\r\ntags:\r\n  - attack.impact\r\n  - attack.t1490\r\nlogsource: {product: windows, category: process_creation}\r\ndetection:\r\n  selection: {Image|endswith: '\\vssadmin.exe', CommandLine|contains|all: ['delete', 'shadows']}\r\n  condition: selection",
    "name": "Shadow Copies Deletion via Vssadmin",
    "techniques": [
     "T1490"
@@ -309,19 +319,24 @@
    "confidence": "high",
    "mapped": true,
    "rejected": [],
-   "note": "La règle cible précisément la suppression des shadow copies.",
+   "note": "Techniques lues dans les tags de la règle (sans IA).",
    "reviewed": false,
    "why": {
-    "vkkwclf": "détecte la suppression des clichés VSS afin d'empêcher la restauration avant chiffrement.",
-    "lijlu94": "détecte l'inhibition des mécanismes de récupération avant impact ransomware.",
-    "510znye": "détecte une étape de préparation à l'impact visant à empêcher la récupération.",
-    "9c72kba": "détecte une action de défense impairment par suppression des copies de sauvegarde locales."
-   }
+    "vkkwclf": "Lien automatique : technique commune T1490.",
+    "lijlu94": "Lien automatique : technique commune T1490.",
+    "510znye": "Lien automatique : technique commune T1490.",
+    "9c72kba": "Lien automatique : technique commune T1490."
+   },
+   "tags": [
+    "T1490"
+   ],
+   "by": "tags",
+   "tagDiff": null
   },
   {
    "id": "in9qi0r",
-   "source": "collé",
-   "body": "title: PsExec Service Installation\nlogsource: {product: windows, service: system}\ndetection:\n  selection: {EventID: 7045, ServiceName: 'PSEXESVC'}\n  condition: selection",
+   "source": "exemple.yml",
+   "body": "title: PsExec Service Installation\r\ntags:\r\n  - attack.execution\r\n  - attack.t1569.002\r\nlogsource: {product: windows, service: system}\r\ndetection:\r\n  selection: {EventID: 7045, ServiceName: 'PSEXESVC'}\r\n  condition: selection",
    "name": "PsExec Service Installation",
    "techniques": [
     "T1021.002"
@@ -337,12 +352,24 @@
    "reviewed": false,
    "why": {
     "g4seqvc": "détecte l'installation du service PsExec utilisé pour l'exécution distante via SMB."
+   },
+   "tags": [
+    "T1569.002"
+   ],
+   "by": "ia",
+   "tagDiff": {
+    "tags": [
+     "T1569.002"
+    ],
+    "ia": [
+     "T1021.002"
+    ]
    }
   },
   {
    "id": "ju1gjkd",
-   "source": "collé",
-   "body": "title: Office Application Spawning Script Interpreter\nlogsource: {product: windows, category: process_creation}\ndetection:\n  selection: {ParentImage|endswith: ['\\winword.exe', '\\excel.exe'], Image|endswith: ['\\cmd.exe', '\\powershell.exe', '\\wscript.exe']}\n  condition: selection",
+   "source": "exemple.yml",
+   "body": "title: Office Application Spawning Script Interpreter\r\ntags:\r\n  - attack.execution\r\n  - attack.t1204.002\r\nlogsource: {product: windows, category: process_creation}\r\ndetection:\r\n  selection: {ParentImage|endswith: ['\\winword.exe', '\\excel.exe'], Image|endswith: ['\\cmd.exe', '\\powershell.exe', '\\wscript.exe']}\r\n  condition: selection",
    "name": "Office Application Spawning Script Interpreter",
    "techniques": [
     "T1204.002",
@@ -364,12 +391,25 @@
    "why": {
     "vkkwclf": "détecte l'exécution d'un interpréteur de commandes lancée depuis une application Office après interaction utilisateur.",
     "g4seqvc": "détecte l'étape initiale d'exécution malveillante provenant d'un document Office."
+   },
+   "tags": [
+    "T1204.002"
+   ],
+   "by": "ia",
+   "tagDiff": {
+    "tags": [],
+    "ia": [
+     "T1059.001",
+     "T1059.003",
+     "T1059.005",
+     "T1059.007"
+    ]
    }
   },
   {
    "id": "pfo69g9",
-   "source": "collé",
-   "body": "title: Rclone Execution with Remote Config\nlogsource: {product: windows, category: process_creation}\ndetection:\n  selection: {CommandLine|contains: ['rclone', ' copy ', ' sync ']}\n  condition: selection",
+   "source": "exemple.yml",
+   "body": "title: Rclone Execution with Remote Config\r\nlogsource: {product: windows, category: process_creation}\r\ndetection:\r\n  selection: {CommandLine|contains: ['rclone', ' copy ', ' sync ']}\r\n  condition: selection",
    "name": "Rclone Execution with Remote Config",
    "techniques": [
     "T1567.002"
@@ -387,12 +427,15 @@
    "why": {
     "2xe2f60": "détecte un transfert potentiel de données vers un service de stockage cloud via Rclone.",
     "fkcufn8": "détecte l'étape d'exfiltration vers un stockage cloud utilisée lors d'une double extorsion."
-   }
+   },
+   "tags": [],
+   "by": "ia",
+   "tagDiff": null
   },
   {
    "id": "7fgcn3n",
-   "source": "collé",
-   "body": "title: Kerberoasting - Multiple TGS Requests with RC4\nlogsource: {product: windows, service: security}\ndetection:\n  selection: {EventID: 4769, TicketEncryptionType: '0x17'}\n  condition: selection | count(ServiceName) by IpAddress > 10",
+   "source": "exemple.yml",
+   "body": "title: Kerberoasting - Multiple TGS Requests with RC4\r\nlogsource: {product: windows, service: security}\r\ndetection:\r\n  selection: {EventID: 4769, TicketEncryptionType: '0x17'}\r\n  condition: selection | count(ServiceName) by IpAddress > 10",
    "name": "Kerberoasting - Multiple TGS Requests with RC4",
    "techniques": [
     "T1558.003"
@@ -410,7 +453,10 @@
    "why": {
     "vkkwclf": "détecte des requêtes TGS RC4 en volume compatibles avec une activité de Kerberoasting.",
     "r7235f5": "détecte directement l'étape Kerberoasting de collecte de tickets de service."
-   }
+   },
+   "tags": [],
+   "by": "ia",
+   "tagDiff": null
   }
  ]
 }

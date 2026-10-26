@@ -1,7 +1,8 @@
 import { state, save, uid, sample } from './store.js';
 import { chatJson } from './llm.js';
 import { attack, tech, validate, parentOf, promptCatalog } from './attack.js';
-import { esc, $, readFiles, run, gateAI } from './ui.js';
+import { esc, $, readFiles, run } from './ui.js';
+import { isAuthorized } from './keys.js';
 
 const SYSTEM = (stages, scenarios) => `Tu es un ingénieur detection engineering. Pour chaque règle de détection (Sigma, KQL, SPL, EDR, ou simple documentation), tu identifies les techniques ATT&CK Enterprise qu'elle détecte réellement (pas celles simplement liées au contexte).
 Réponds en JSON : {"results":[{"i":0,"techniques":["T1059.001"],"scenarios":[{"s":"S1","why":"une phrase"}],"stage":"","confidence":"high|medium|low","note":""}]}
@@ -11,6 +12,23 @@ Réponds en JSON : {"results":[{"i":0,"techniques":["T1059.001"],"scenarios":[{"
 - confidence : high = détection directe et robuste ; medium = partielle/contournable ; low = indirecte ou très bruitée.
 Scénarios :\n${scenarios.map((s, k) => `S${k + 1} ${s.name} [${s.techniques.join(',')}]`).join('\n') || '(aucun)'}
 Techniques parentes de référence :\n${promptCatalog()}`;
+
+/** IDs ATT&CK déclarés dans la règle, sans IA : tags Sigma (attack.t1059.001), champs MITRE des exports Sentinel/Splunk/Elastic (T1059…). Validés contre le référentiel. */
+export const extractTechniques = body => validate((String(body).match(/\bT\d{4}(?:\.\d{3})?\b/gi) || [])).ok;
+const tagsOf = r => (r.tags ??= extractTechniques(r.body));
+/** Écart (au niveau technique parente) entre les tags déclarés et la lecture de l'IA ; null si aucun. */
+export const tagDiff = (tags, ia) => {
+  const P = a => new Set(a.map(parentOf)), pt = P(tags), pi = P(ia);
+  const d = { tags: tags.filter(t => !pi.has(parentOf(t))), ia: ia.filter(t => !pt.has(parentOf(t))) };
+  return tags.length && (d.tags.length || d.ia.length) ? d : null;
+};
+/** Mapping déterministe depuis les tags : scénarios liés = ceux qui partagent une technique. */
+const fromTags = (r, tags, S) => {
+  const links = S.map(s => [s, common({ techniques: tags }, s)]).filter(([, c]) => c.length);
+  return { techniques: tags, rejected: [], scenarios: links.map(([s]) => s.id), mapped: true, reviewed: false, by: 'tags', tagDiff: null,
+    why: Object.fromEntries(links.map(([s, c]) => [s.id, `Lien automatique : technique commune ${c.join(', ')}.`])),
+    note: 'Techniques lues dans les tags de la règle (sans IA).' };
+};
 
 /** Découpe un texte collé en règles (séparateur : ligne '---' ou '==='). */
 const splitRules = (name, text) => text.split(/^\s*(?:---|===)\s*$/m).map(t => t.trim()).filter(Boolean).map(body => ({
@@ -37,9 +55,9 @@ export const linkState = (r, s) => {
 };
 const flags = r => {
   const st = state.scenarios.map(s => linkState(r, s)), n = r.scenarios.length;
-  return { todo: !r.reviewed, suspect: st.includes('suspect'), miss: st.includes('miss'), none: !n, wide: n >= 4 && n > state.scenarios.length / 2, low: r.confidence === 'low' };
+  return { todo: !r.reviewed, suspect: st.includes('suspect'), miss: st.includes('miss'), none: !n, wide: n >= 4 && n > state.scenarios.length / 2, low: r.confidence === 'low', diff: !!r.tagDiff };
 };
-const FILTERS = { all: 'Toutes', todo: 'À relire', suspect: 'Suspects', miss: 'Oublis possibles', none: 'Sans scénario', wide: 'Trop larges', low: 'Confiance basse' };
+const FILTERS = { all: 'Toutes', todo: 'À relire', suspect: 'Suspects', miss: 'Oublis possibles', none: 'Sans scénario', wide: 'Trop larges', low: 'Confiance basse', diff: 'Écart tags / IA' };
 const SYM = { ok: '●', suspect: '⚠', miss: '◌', '': '·' };
 const view = { q: '', f: 'all', hl: '', sel: null }; // état d'affichage conservé tant que la page est ouverte
 const scId = (ref, sc) => sc[+String(ref).replace(/\D/g, '') - 1]?.id;
@@ -53,13 +71,15 @@ export function render(root) {
       <span class="mut">Un fichier = une ou plusieurs règles (séparateur ---) ; un .json contenant un tableau = une règle par élément.</span></div>
   </details>
   <div class="bar"><button id="map" class="pri">Mapper les règles non traitées</button><button id="remap">Tout remapper</button><span id="st"></span></div>
+  <label class="chk"><input type="checkbox" id="verify"> Faire aussi relire par l'IA les règles qui ont des tags ATT&amp;CK (détecte les écarts entre tags déclarés et logique de la règle)</label>
+  <p class="mut" style="margin-top:0">Les règles qui déclarent leurs techniques (tags Sigma <code>attack.t…</code>, champs MITRE des exports SIEM/EDR) sont mappées sans IA ; l'IA ne traite que les autres.</p>
   <h2>Revue du mapping (<span id="n"></span>)</h2>
   <div class="mtools"><input id="q" type="search" placeholder="Chercher règle ou technique" aria-label="Chercher"><span id="flt"></span><span id="prog" class="mut"></span></div>
   <p class="mut" style="margin:.2rem 0 .6rem"><b>●</b> lié, techniques en commun · <b class="err">⚠</b> lié sans technique commune (à challenger) · <b style="color:var(--amber)">◌</b> non lié mais technique en commun (oubli possible) · clic sur une cellule = lier / délier · clic sur une ligne = détail</p>
   <div class="mwrap"><table class="rm"><thead id="head"></thead><tbody id="rows"></tbody><tfoot id="foot"></tfoot></table></div>
   <aside id="detail" aria-live="polite"></aside><datalist id="techlist">${attack.techniques.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</datalist>`;
 
-  gateAI(root, ['#map', '#remap'], '#st');
+  if (!isAuthorized()) $(root, '#st').innerHTML = '<span class="mut">IA non autorisée : seules les règles avec tags ATT&amp;CK seront mappées (autorisation dans Paramètres).</span>';
   const sc = () => state.scenarios, rule = id => state.rules.find(r => r.id === id);
   const chips = (ids, rm) => ids.map(t => `<span class="tag" title="${esc(tech(t)?.name || '')}">${t}${rm ? `<button class="rmt" data-rmt="${t}" aria-label="Retirer ${t}">×</button>` : ''}</span>`).join('');
 
@@ -74,7 +94,7 @@ export function render(root) {
     if (view.hl) list.sort((a, b) => b.scenarios.includes(view.hl) - a.scenarios.includes(view.hl));
     $(root, '#rows').innerHTML = list.map(r => `<tr data-id="${r.id}" class="${view.sel === r.id ? 'sel' : ''}">
       <td><input type="checkbox" data-rev ${r.reviewed ? 'checked' : ''} aria-label="Règle validée"></td>
-      <td><b>${esc(r.name)}</b><div class="mut">${esc(r.source)}${r.confidence ? ' · ' + esc(r.confidence) : ''}${r.stage ? ' · ' + esc(r.stage) : ''}</div></td>
+      <td><b>${esc(r.name)}</b><div class="mut">${esc(r.source)}${r.confidence ? ' · ' + esc(r.confidence) : ''}${r.stage ? ' · ' + esc(r.stage) : ''}${r.by ? ' · via ' + (r.by === 'tags' ? 'tags' : 'IA') : ''}</div></td>
       <td>${chips(r.techniques)}${r.rejected?.length ? `<div class="err">rejetés : ${esc(r.rejected.join(', '))}</div>` : ''}</td>
       ${S.map(s => { const k = linkState(r, s); return `<td class="lk ${k} ${view.hl === s.id ? 'hl' : ''}"><button data-s="${s.id}" aria-pressed="${r.scenarios.includes(s.id)}" title="${esc(s.name)}">${SYM[k] || (r.scenarios.includes(s.id) ? '●' : '·')}</button></td>`; }).join('')}</tr>`).join('')
       || `<tr><td colspan="${3 + S.length}" class="mut">${state.rules.length ? 'Aucune règle ne correspond à ces filtres.' : 'Aucune règle : importe-en ci-dessus.'}</td></tr>`;
@@ -100,6 +120,8 @@ export function render(root) {
         <div>${chips(common(r, s))}</div><button data-unlink="${s.id}">Délier</button></div>`).join('') || '<p class="mut">Aucun scénario lié.</p>'}
       <h4>Oublis possibles (${miss.length})</h4>${miss.map(s => `<div class="item"><span class="tag sref">S${idx(s)}</span> ${esc(s.name)}<div>${chips(common(r, s))}</div><button data-link="${s.id}">Lier</button></div>`).join('') || '<p class="mut">Aucun.</p>'}
       <h4>Techniques</h4><div>${chips(r.techniques, true) || '<span class="mut">Aucune.</span>'}</div>
+      ${tagsOf(r).length ? `<p class="mut">Tags déclarés dans la règle : ${chips(tagsOf(r))}</p>` : ''}
+      ${r.tagDiff ? `<div class="item"><span class="tag gap">Écart tags / IA</span> ${r.tagDiff.tags.length ? `tags seuls : ${chips(r.tagDiff.tags)}` : ''} ${r.tagDiff.ia.length ? `IA seule : ${chips(r.tagDiff.ia)}` : ''}<div><button data-usetags>Utiliser les tags</button></div></div>` : ''}
       <div class="bar"><input id="addt" list="techlist" placeholder="T1059.001" style="width:9rem"><button data-addt>Ajouter</button></div>${r.rejected?.length ? `<p class="err">ID inconnu : ${esc(r.rejected.join(', '))}</p>` : ''}
       <h4>Qualification</h4><div class="row"><div><label>Confiance</label><select data-d="confidence">${['', 'high', 'medium', 'low'].map(x => `<option ${x === r.confidence ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
         <div><label>Étape</label><select data-d="stage"><option></option>${state.settings.stages.map(x => `<option ${x === r.stage ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div></div>
@@ -128,6 +150,7 @@ export function render(root) {
     if (t.dataset.unlink) link(r, t.dataset.unlink, false);
     else if (t.dataset.link) link(r, t.dataset.link, true);
     else if (t.dataset.rmt) r.techniques = r.techniques.filter(x => x !== t.dataset.rmt);
+    else if (t.dataset.usetags !== undefined) { r.techniques = [...tagsOf(r)]; r.tagDiff = null; }
     else if (t.dataset.addt !== undefined) {
       const v = validate($(dt, '#addt').value.split(/[,\s]+/).filter(Boolean));
       r.techniques = [...new Set([...r.techniques, ...v.ok])]; r.mapped = true; r.rejected = v.rejected;
@@ -149,9 +172,20 @@ export function render(root) {
     e.target.value = ''; save(); draw();
   };
   const go = all => run($(root, '#st'), async (signal, say) => {
-    const todo = state.rules.filter(r => all || !r.mapped), n = +state.settings.batch || 8;
-    if (!todo.length) throw new Error('Rien à mapper.');
-    const S = sc(), system = SYSTEM(state.settings.stages, S);
+    const todo0 = state.rules.filter(r => all || !r.mapped), n = +state.settings.batch || 8, verify = $(root, '#verify').checked;
+    if (!todo0.length) throw new Error('Rien à mapper.');
+    const S = sc(), todo = [];
+    let nTags = 0;
+    for (const r of todo0) { // 1. déterministe d'abord : techniques déclarées dans la règle
+      const tags = tagsOf(r);
+      if (tags.length) { Object.assign(r, fromTags(r, tags, S)); nTags++; }
+      if (!tags.length || verify) todo.push(r);
+    }
+    save(); draw();
+    const done = `${nTags} règle(s) mappée(s) depuis leurs tags`;
+    if (!todo.length) return done + ', sans IA.';
+    if (!isAuthorized()) throw new Error(`${done}. ${todo.length} règle(s) restante(s) nécessitent l'IA : coche l'autorisation dans Paramètres.`);
+    const system = SYSTEM(state.settings.stages, S);
     for (let i = 0; i < todo.length; i += n) {
       say(`Lot ${i / n + 1}/${Math.ceil(todo.length / n)}…`);
       const batch = todo.slice(i, i + n);
@@ -162,10 +196,11 @@ export function render(root) {
         const v = validate(x.techniques), links = (x.scenarios || []).map(e => typeof e === 'string' ? { s: e } : e)
           .map(l => ({ id: scId(l.s, S), why: l.why })).filter(l => l.id); // ancien format (liste d'IDs) accepté
         Object.assign(r, { techniques: v.ok, rejected: v.rejected, stage: x.stage || '', confidence: x.confidence || 'medium', note: x.note || '', mapped: true, reviewed: false,
-          scenarios: links.map(l => l.id), why: Object.fromEntries(links.filter(l => l.why).map(l => [l.id, l.why])) });
+          scenarios: links.map(l => l.id), why: Object.fromEntries(links.filter(l => l.why).map(l => [l.id, l.why])), by: 'ia', tagDiff: tagDiff(tagsOf(r), v.ok) });
       }
       save(); draw();
     }
+    return `${done} ; ${todo.length} règle(s) traitée(s) par l'IA.`;
   });
   $(root, '#map').onclick = () => go(false);
   $(root, '#remap').onclick = () => go(true);

@@ -7,7 +7,7 @@ export async function run(statusEl, fn) {
   const ac = new AbortController();
   statusEl.innerHTML = '<span class="mut">En cours… </span><button>Annuler</button>';
   statusEl.querySelector('button').onclick = () => ac.abort();
-  try { await fn(ac.signal, msg => statusEl.firstChild.textContent = msg + ' '); statusEl.innerHTML = '<span class="ok">Terminé</span>'; }
+  try { const done = await fn(ac.signal, msg => statusEl.firstChild.textContent = msg + ' '); statusEl.innerHTML = `<span class="ok">${esc(done || 'Terminé')}</span>`; }
   catch (e) { statusEl.innerHTML = e.name === 'AbortError' ? '<span class="mut">Annulé</span>' : `<span class="err">${esc(e.message)}</span>`; }
 }
 /** Désactive les boutons IA tant que l'usage de l'IA n'est pas autorisé (Paramètres). */
