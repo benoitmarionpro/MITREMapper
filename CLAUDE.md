@@ -9,7 +9,7 @@ Outil 100 % client-side (HTML/JS/CSS, hébergement statique) qui aide un analyst
 Le LLM fait le gros du travail ; l'utilisateur relit et corrige. Les IDs ATT&CK renvoyés par le LLM sont toujours validés contre le référentiel embarqué (anti-hallucination).
 
 ## Contraintes
-- Statique pur : pas de backend, pas de dépendance npm au runtime, ES modules natifs. Le dossier se sert avec `python -m http.server 8000` ; pour l'usage sans serveur, `node tools/build-standalone.mjs` génère `dist/mitremapper.html` (fichier unique, ouvrable en `file://`). **Régénérer et committer `dist/` après toute modification de `js/`, `css/`, `index.html` ou `data/`.**
+- Statique pur : pas de backend, pas de dépendance npm au runtime, ES modules natifs. Le dossier se sert avec `python tools/serve.py` (sans cache ; `python -m http.server` laisse le navigateur garder d'anciens modules) ; pour l'usage sans serveur, `node tools/build-standalone.mjs` génère `dist/mitremapper.html` (fichier unique, ouvrable en `file://`). **Régénérer et committer `dist/` après toute modification de `js/`, `css/`, `index.html` ou `data/`.**
 - Règles de l'équipe centrale Wavestone : `CYBAIMaker.md` (à respecter pour toute évolution : approbation avant appel IA, secrets, `LLMClient`, validation, erreurs).
 - Données projet dans le `localStorage` (clé `mitremapper.v1`). Les clés API sont **séparées** (`js/keys.js`, `mitremapper.keys`) : `sessionStorage` par défaut, `localStorage` seulement via « Mémoriser cette clé », une clé par fournisseur ; jamais dans le projet, les exports, les prompts ou les messages d'erreur. L'autorisation d'usage de l'IA est en `sessionStorage` (`mitremapper.ai-ok`) et bloque tout appel tant qu'elle n'est pas donnée. Rien n'est envoyé ailleurs qu'à l'endpoint LLM configuré.
 - LLM configurable via le registre `PROVIDERS` de `js/llm.js` (OpenAI, Anthropic, Mistral, Azure OpenAI/Foundry, Ollama Cloud, Ollama local, OpenRouter, générique compatible OpenAI). Un seul point d'accès : `llm` (classe `LLMClient` : `getAvailableModels`, `testConnection`, `generate`), précédé de `config()` qui valide autorisation, fournisseur, modèle, clé, HTTPS et URL, et de `LLMError` (erreurs contextualisées, purgées des secrets). Endpoint de dev par défaut : `http://127.0.0.1:11434/v1` (modèle `auto`).
@@ -27,6 +27,7 @@ Le LLM fait le gros du travail ; l'utilisateur relit et corrige. Les IDs ATT&CK 
 | `js/scenarios.js`, `js/mapping.js`, `js/coverage.js` | Un module par écran : prompts + rendu + édition |
 | `js/export.js` | Livrables : `reportHtml(A)` (rapport imprimable), `workbook(A)` (.xlsx écrit à la main), `layer(A, s?)` / `layersZip(A)` (Navigator), `zip()` (zip « stocké » + CRC32), `reco()` ; `A = analysis()` de `coverage.js` (ne pas importer `coverage.js` depuis `export.js` : cycle interdit par le mini-bundler) |
 | `js/settings.js` | Configuration LLM, étapes de stratégie, import/export projet |
+| `js/i18n.js` | `t()`, `lang`, `locale`, `setLang`, dictionnaire `EN` |
 | `js/ui.js` | Helpers (`esc`, `run` avec annulation, lecture de fichiers) |
 | `data/attack.json` | Référentiel ATT&CK Enterprise compact, **généré** |
 | `tools/build-attack.mjs` | Régénère `data/attack.json` depuis le STIX officiel (`node tools/build-attack.mjs`) |
@@ -48,7 +49,8 @@ Mapping déterministe d'abord (`mapping.js`) : `extractTechniques(body)` lit les
 Règle de couverture (`coverage.js`, `status(coverageMap(), id)`) : *couverte* si une règle de confiance ≥ medium cite la technique elle-même, ou si toutes ses sous-techniques sont couvertes ; *partielle* si seulement certaines sous-techniques, confiance `low`, ou (sous-technique) seule la parente est couverte ; sinon *écart*.
 
 ## Conventions
-- Interface et prompts en français. Les noms de techniques restent ceux de MITRE.
+- Interface bilingue (`js/i18n.js`) : tout texte affiché passe par `t('texte français', { var })` (clé = français, `{var}` pour les variables, apostrophe typographique ’ dans les clés) et doit avoir son entrée dans `EN` (vérifié par `test.html`). Langue mémorisée dans `localStorage` (`mitremapper.lang`), changement = rechargement. Prompts en français, avec consigne de rédiger en anglais si `lang === 'en'`. Les noms de techniques restent ceux de MITRE.
+- Ne pas nommer `t` une variable locale dans un module qui importe `t`.
 - Toute sortie LLM passe par `chatJson` puis `validate()` avant d'entrer dans l'état.
 - Le référentiel ATT&CK évolue (v19 a scindé Defense Evasion en Stealth + Defense Impairment) : ne pas coder en dur la liste des tactiques, elle vient de `attack.json`.
 - Vérifier après modification : `node --check js/*.js`, ouvrir `test.html`, tester sur l'exemple de `data/sample/`, régénérer `dist/mitremapper.html` et l'ouvrir en `file://`.

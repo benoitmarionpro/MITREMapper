@@ -1,10 +1,11 @@
 import { setKey } from './keys.js';
+import { t, lang } from './i18n.js';
 const KEY = 'mitremapper.v1';                         // projet courant + réglages
 const LIB = 'mitremapper.lib', LIBP = 'mitremapper.lib.'; // index des projets + données de chaque projet (sans réglages)
-export const DEFAULT_STAGES = ['Prévention', 'Détection', 'Investigation', 'Réponse'];
+export const DEFAULT_STAGES = lang === 'en' ? ['Prevention', 'Detection', 'Investigation', 'Response'] : ['Prévention', 'Détection', 'Investigation', 'Réponse'];
 export const uid = () => Math.random().toString(36).slice(2, 9);
 const fresh = () => ({
-  pid: uid(), name: 'Projet sans nom', nextRef: 1,
+  pid: uid(), name: t('Projet sans nom'), nextRef: 1,
   client: { sector: '', size: '', country: '', assets: '' },
   cti: '', scenarios: [], rules: [],
   settings: { provider: 'local', base: 'http://127.0.0.1:11434/v1', model: 'auto', deployment: '', apiVersion: '2024-10-21', temperature: 0.2, batch: 8, stages: DEFAULT_STAGES },
@@ -51,10 +52,10 @@ function loadInto(d) {
 export const listProjects = () => Object.entries(readLib()).map(([pid, p]) => ({ pid, ...p })).sort((a, b) => b.updated.localeCompare(a.updated));
 export function openProject(pid) {
   const d = JSON.parse(localStorage.getItem(LIBP + pid) || 'null');
-  if (!d) throw new Error('Projet introuvable');
+  if (!d) throw new Error(t('Projet introuvable'));
   loadInto({ ...d, pid });
 }
-export const newProject = name => loadInto({ pid: uid(), name: name || 'Nouveau projet' });
+export const newProject = name => loadInto({ pid: uid(), name: name || t('Nouveau projet') });
 export function deleteProject(pid) {
   const lib = readLib(); delete lib[pid];
   try { localStorage.setItem(LIB, JSON.stringify(lib)); localStorage.removeItem(LIBP + pid); } catch {}
@@ -70,10 +71,10 @@ export const exportJson = (name, data) => download(name, new Blob([typeof data =
 /** Importe un fichier projet comme NOUVEAU projet (le projet courant reste dans la bibliothèque). */
 export function importProject(text, name) {
   const d = JSON.parse(text);
-  if (!d.scenarios || !d.rules) throw new Error('Fichier projet invalide');
-  loadInto({ ...d, pid: uid(), name: d.name && d.name !== 'Projet sans nom' ? d.name : name || 'Projet importé' });
+  if (!d.scenarios || !d.rules) throw new Error(t('Fichier projet invalide'));
+  loadInto({ ...d, pid: uid(), name: d.name && !['Projet sans nom', 'Untitled project'].includes(d.name) ? d.name : name || t('Projet importé') });
 }
 /** Charge un fichier de data/sample/ (démos rapides). */
-export const sample = f => globalThis.__SAMPLES__?.[f] != null ? Promise.resolve(globalThis.__SAMPLES__[f]) : fetch('data/sample/' + f, { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error('Exemple introuvable : ' + f); return r.text(); });
+export const sample = f => globalThis.__SAMPLES__?.[f] != null ? Promise.resolve(globalThis.__SAMPLES__[f]) : fetch('data/sample/' + f, { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(t('Exemple introuvable : {f}', { f })); return r.text(); });
 /** Démo complète sans LLM (scénarios + règles déjà mappés), ouverte dans un nouveau projet. */
-export const loadDemo = async () => importProject(await sample('project.json'), 'Démo : établissement de santé');
+export const loadDemo = async () => importProject(await sample('project.json'), t('Démo : établissement de santé'));

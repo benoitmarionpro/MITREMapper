@@ -12,11 +12,14 @@
   <nav id="tabs"></nav>
   <span id="proj" title="Projet courant (Paramètres → Projets)"></span>
   <span id="ver"></span>
+  <button id="lang" class="lang"></button>
 </header>
 <main id="view"></main>
 <!-- dev:start (retiré de dist/mitremapper.html par tools/build-standalone.mjs) -->
 <script>
-if (location.protocol === 'file:') document.getElementById('view').innerHTML =
+if (location.protocol === 'file:') document.getElementById('view').innerHTML = localStorage.getItem('mitremapper.lang') === 'en' ?
+  '<div class="card"><b>This folder cannot be opened directly (file://): browsers block JavaScript modules.</b>' +
+  '<p>Open <code>dist/mitremapper.html</code> instead (single file, no server), or serve the folder over HTTP: <code>python -m http.server 8000</code> then <code>http://localhost:8000</code>.</p></div>' :
   '<div class="card"><b>Ce dossier ne peut pas être ouvert directement (file://) : les navigateurs bloquent les modules JavaScript.</b>' +
   '<p>Ouvre plutôt <code>dist/mitremapper.html</code> par double-clic (fichier unique, sans serveur), ou sers le dossier en HTTP : <code>python -m http.server 8000</code> puis <code>http://localhost:8000</code>.</p></div>';
 </script>

@@ -102,3 +102,5 @@ label.chk input{width:auto;min-height:0;margin-top:.2rem}
 .pill{font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;background:var(--ink-100);color:var(--mut)}
 .pill.ok{background:var(--green-50);color:var(--green-700)}.pill.warn{background:var(--amber-bg);color:#8A4800}.pill.error{background:var(--red-bg);color:#a02a29}.pill.busy{background:var(--indigo-50);color:var(--indigo-800)}
 [hidden]{display:none!important}
+.lang{margin-left:.8rem;padding:4px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.3);background:transparent;color:rgba(255,255,255,.85);font-size:12px;font-weight:500}
+.lang:hover{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.6);color:#fff}

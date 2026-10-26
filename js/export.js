@@ -3,22 +3,25 @@
 import { state, sref } from './store.js';
 import { attack, tech } from './attack.js';
 import { esc } from './ui.js';
+import { t, lang, locale } from './i18n.js';
 
-const LBL = { cov: 'Couvert', part: 'Partiel', gap: 'Écart' };
-const PRIO = { high: 'Haute', medium: 'Moyenne', low: 'Basse' };
+const LBL = { cov: t('Couvert'), part: t('Partiel'), gap: t('Écart') };
+const PRIO = { high: t('Haute'), medium: t('Moyenne'), low: t('Basse') };
 const prio = p => PRIO[p] || p || '';
 const name = id => tech(id)?.name || '';
 const scName = id => state.scenarios.find(s => s.id === id);
+const yesNo = b => b ? t('oui') : t('non');
+const origin = r => r.by === 'tags' ? 'tags' : r.by === 'ia' ? t('IA') : '';
 
 /** Recommandation déterministe pour une technique de scénario non couverte. */
 export function reco(A, g) {
-  if (g.k === 'gap') return 'Aucune détection : créer une règle pour cette technique.';
+  if (g.k === 'gap') return t('Aucune détection : créer une règle pour cette technique.');
   const e = A.cm.get(g.id);
-  if (!e) return 'Seule la technique parente est couverte : vérifier que la détection couvre cette sous-technique.';
-  if (e.best < 2) return 'Détection de confiance basse : renforcer ou compléter la règle existante.';
-  const subs = attack.techniques.filter(t => t.id.startsWith(g.id + '.'));
-  const ok = subs.filter(t => (A.cm.get(t.id)?.exact || 0) >= 2).length;
-  return `Sous-techniques couvertes : ${ok}/${subs.length} ; compléter les variantes utilisées par les scénarios.`;
+  if (!e) return t('Seule la technique parente est couverte : vérifier que la détection couvre cette sous-technique.');
+  if (e.best < 2) return t('Détection de confiance basse : renforcer ou compléter la règle existante.');
+  const subs = attack.techniques.filter(x => x.id.startsWith(g.id + '.'));
+  const ok = subs.filter(x => (A.cm.get(x.id)?.exact || 0) >= 2).length;
+  return t('Sous-techniques couvertes : {n}/{m} ; compléter les variantes utilisées par les scénarios.', { n: ok, m: subs.length });
 }
 
 /* ---------- ATT&CK Navigator ---------- */
@@ -26,15 +29,15 @@ const versions = () => ({ layer: '4.5', navigator: '5.1.0', attack: String(attac
 /** Couche globale (score = meilleure confiance) ou couche d'un scénario (3 couvert, 2 partiel, 1 écart). */
 export function layer(A, s) {
   if (!s) return {
-    name: `MITREMapper : ${state.name}`, description: 'Couverture globale : score = meilleure confiance des règles (1 basse, 2 moyenne, 3 haute)',
+    name: `MITREMapper : ${state.name}`, description: t('Couverture globale : score = meilleure confiance des règles (1 basse, 2 moyenne, 3 haute)'),
     versions: versions(), domain: 'enterprise-attack', gradient: { colors: ['#ef9f27', '#2f9e5b'], minValue: 1, maxValue: 3 },
     techniques: [...A.cm].map(([techniqueID, e]) => ({ techniqueID, score: e.best, comment: e.rules.join('; ') })),
   };
   const x = A.scen.find(r => r.s === s), score = { gap: 1, part: 2, cov: 3 };
   return {
-    name: `${sref(s)} ${s.name}`, description: `Scénario ${sref(s)}, priorité ${prio(s.priority)} : 3 couvert, 2 partiel, 1 écart`,
+    name: `${sref(s)} ${s.name}`, description: t('Scénario {ref}, priorité {p} : 3 couvert, 2 partiel, 1 écart', { ref: sref(s), p: prio(s.priority) }),
     versions: versions(), domain: 'enterprise-attack', gradient: { colors: ['#e24b4a', '#ef9f27', '#2f9e5b'], minValue: 1, maxValue: 3 },
-    techniques: x.st.map(([techniqueID, k]) => ({ techniqueID, score: score[k], comment: `${LBL[k]} : ${(A.cm.get(techniqueID)?.rules || []).join('; ') || 'aucune règle'}` })),
+    techniques: x.st.map(([techniqueID, k]) => ({ techniqueID, score: score[k], comment: `${LBL[k]} : ${(A.cm.get(techniqueID)?.rules || []).join('; ') || t('aucune règle')}` })),
   };
 }
 export const layersZip = A => zip({
@@ -80,22 +83,22 @@ function sheet(rows, widths) {
 export function workbook(A) {
   const c = state.client, refs = ids => ids.map(scName).filter(Boolean).map(sref).join(' '), rel = new Set(A.scen.flatMap(x => x.st.map(([id]) => id)));
   const sheets = {
-    'Synthèse': [[['Indicateur', 'Valeur'], ['Projet', state.name], ['Date', new Date().toLocaleDateString('fr-FR')], ['Référentiel', `ATT&CK Enterprise v${attack.version}`],
-      ['Secteur', c.sector], ['Taille', c.size], ['Pays / zones', c.country], ['Actifs clés', c.assets],
-      ['Scénarios', state.scenarios.length], ['Règles', state.rules.length], ['Règles validées', state.rules.filter(r => r.reviewed).length],
-      ['Techniques de scénario', A.nTech], ['Couvertes', A.tot.cov], ['Partielles', A.tot.part], ['Écarts', A.tot.gap], ['Couverture globale (%)', A.pct]], [28, 60]],
-    'Scénarios': [[['Réf', 'Scénario', 'Priorité', 'Acteurs', 'Résumé', 'Techniques', 'Couvertes', 'Partielles', 'Écarts', 'Couverture (%)', 'Règles liées'],
+    [t('Synthèse')]: [[[t('Indicateur'), t('Valeur')], [t('Projet'), state.name], [t('Date'), new Date().toLocaleDateString(locale)], [t('Référentiel'), `ATT&CK Enterprise v${attack.version}`],
+      [t('Secteur'), c.sector], [t('Taille'), c.size], [t('Pays / zones'), c.country], [t('Actifs clés'), c.assets],
+      [t('Scénarios'), state.scenarios.length], [t('Règles'), state.rules.length], [t('Règles validées'), state.rules.filter(r => r.reviewed).length],
+      [t('Techniques de scénario'), A.nTech], [t('Couvertes'), A.tot.cov], [t('Partielles'), A.tot.part], [t('Écarts'), A.tot.gap], [t('Couverture globale (%)'), A.pct]], [28, 60]],
+    [t('Scénarios')]: [[[t('Réf'), t('Scénario'), t('Priorité'), t('Acteurs'), t('Résumé'), t('Techniques'), t('Couvertes'), t('Partielles'), t('Écarts'), t('Couverture (%)'), t('Règles liées')],
       ...A.scen.map(({ s, c: n, pct }) => [sref(s), s.name, prio(s.priority), s.actors || '', s.summary || '', s.techniques.join(' '), n.cov, n.part, n.gap, pct,
         state.rules.filter(r => r.scenarios.includes(s.id)).length])], [6, 45, 10, 25, 60, 40, 11, 11, 8, 14, 12]],
-    'Écarts': [[['Technique', 'Nom', 'Statut', 'Priorité', 'Scénarios', 'Recommandation'],
+    [t('Écarts')]: [[[t('Technique'), t('Nom'), t('Statut'), t('Priorité'), t('Scénarios'), t('Recommandation')],
       ...A.gaps.map(g => [g.id, g.name, LBL[g.k], prio(['high', 'medium', 'low'][g.p]), g.scs.map(sref).join(' '), reco(A, g)])], [12, 40, 10, 10, 22, 80]],
-    'Règles': [[['Règle', 'Source', 'Origine', 'Techniques', 'Scénarios', 'Étape', 'Confiance', 'Validée', 'Note'],
-      ...state.rules.map(r => [r.name, r.source, r.by === 'tags' ? 'tags' : r.by === 'ia' ? 'IA' : '', r.techniques.join(' '), refs(r.scenarios), r.stage || '', r.confidence || '', r.reviewed ? 'oui' : 'non', r.note || ''])],
+    [t('Règles')]: [[[t('Règle'), t('Source'), t('Origine'), t('Techniques'), t('Scénarios'), t('Étape'), t('Confiance'), t('Validée'), t('Note')],
+      ...state.rules.map(r => [r.name, r.source, origin(r), r.techniques.join(' '), refs(r.scenarios), r.stage || '', r.confidence || '', yesNo(r.reviewed), r.note || ''])],
       [45, 16, 9, 30, 22, 14, 11, 9, 70]],
-    'Techniques': [[['Technique', 'Nom', 'Tactiques', 'Statut', 'Dans un scénario', 'Nb règles', 'Règles'],
-      ...attack.techniques.filter(t => rel.has(t.id) || A.cm.has(t.id)).map(t => {
-        const k = A.status(t.id), e = A.cm.get(t.id);
-        return [t.id, t.name, t.tactics.join(', '), k === 'gap' && !rel.has(t.id) ? '' : LBL[k], rel.has(t.id) ? 'oui' : 'non', e ? e.n : 0, e ? e.rules.join('; ') : ''];
+    [t('Techniques')]: [[[t('Technique'), t('Nom'), t('Tactiques'), t('Statut'), t('Dans un scénario'), t('Nb règles'), t('Règles')],
+      ...attack.techniques.filter(x => rel.has(x.id) || A.cm.has(x.id)).map(x => {
+        const k = A.status(x.id), e = A.cm.get(x.id);
+        return [x.id, x.name, x.tactics.join(', '), k === 'gap' && !rel.has(x.id) ? '' : LBL[k], yesNo(rel.has(x.id)), e ? e.n : 0, e ? e.rules.join('; ') : ''];
       })], [12, 40, 30, 10, 16, 10, 80]],
   };
   const names = Object.keys(sheets), ns = 'http://schemas.openxmlformats.org/';
@@ -112,17 +115,18 @@ export function workbook(A) {
 
 /* ---------- Rapport client (HTML imprimable) ---------- */
 export function reportHtml(A) {
-  const c = state.client, date = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+  const c = state.client, date = new Date().toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' });
   const rel = new Set(A.scen.flatMap(x => x.st.map(([id]) => id.split('.')[0])));
   const validated = state.rules.filter(r => r.reviewed).length;
   const kpi = (v, l, cls = '') => `<div class="kpi ${cls}"><b>${v}</b><span>${l}</span></div>`;
-  const bar = n => { const t = n.cov + n.part + n.gap || 1; return `<div class="bar">${['cov', 'part', 'gap'].map(k => n[k] ? `<i class="${k}" style="width:${100 * n[k] / t}%"></i>` : '').join('')}</div>`; };
-  const parents = attack.techniques.filter(t => !t.id.includes('.'));
+  const bar = n => { const tot = n.cov + n.part + n.gap || 1; return `<div class="bar">${['cov', 'part', 'gap'].map(k => n[k] ? `<i class="${k}" style="width:${100 * n[k] / tot}%"></i>` : '').join('')}</div>`; };
+  const parents = attack.techniques.filter(x => !x.id.includes('.'));
   const cols = attack.tactics.map(tc => {
-    const cells = parents.filter(t => t.tactics.includes(tc.short)).map(t => [t, A.status(t.id)]).filter(([t, k]) => k !== 'gap' || rel.has(t.id));
-    return cells.length ? `<div class="col"><h4>${esc(tc.name)}</h4>${cells.map(([t, k]) => `<div class="cell ${k}${rel.has(t.id) ? ' rel' : ''}"><b>${t.id}</b> ${esc(t.name)}</div>`).join('')}</div>` : '';
+    const cells = parents.filter(x => x.tactics.includes(tc.short)).map(x => [x, A.status(x.id)]).filter(([x, k]) => k !== 'gap' || rel.has(x.id));
+    return cells.length ? `<div class="col"><h4>${esc(tc.name)}</h4>${cells.map(([x, k]) => `<div class="cell ${k}${rel.has(x.id) ? ' rel' : ''}"><b>${x.id}</b> ${esc(x.name)}</div>`).join('')}</div>` : '';
   }).join('');
-  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Couverture de détection : ${esc(state.name)}</title><style>
+  const profile = [c.sector, c.size, c.country].filter(Boolean);
+  return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><title>${t('Couverture de détection : {name}', { name: esc(state.name) })}</title><style>
 :root{--ind:#451DC7;--ind8:#2D1380;--ink:#16121F;--mut:#6B6580;--line:#E6E4EE;--cov:#04F06A;--covt:#088A42;--part:#EF9F27;--partb:#FEF6E8;--gap:#E24B4A;--gapb:#FDF1F1}
 *{box-sizing:border-box}body{margin:0;font:11pt/1.5 Inter,'Segoe UI',system-ui,sans-serif;color:var(--ink);background:#fff}
 h1,h2,h3,h4{font-family:Poppins,'Segoe UI',system-ui,sans-serif;line-height:1.25}
@@ -143,40 +147,40 @@ tr{break-inside:avoid}.ref{display:inline-block;background:var(--ind);color:#fff
 @page{size:A4;margin:12mm}@page matrice{size:A4 landscape;margin:10mm}.pg-matrix{page:matrice;break-before:page}
 @media print{.noprint{display:none}header{-webkit-print-color-adjust:exact;print-color-adjust:exact}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}h2{break-after:avoid}}
 </style></head><body>
-<div class="noprint"><button onclick="print()">Imprimer / PDF</button></div>
-<header><h1>Couverture de détection : ${esc(state.name)}</h1>
-<p>${date} · Référentiel MITRE ATT&amp;CK Enterprise v${esc(attack.version)}${[c.sector, c.size, c.country].filter(Boolean).length ? ' · ' + esc([c.sector, c.size, c.country].filter(Boolean).join(' · ')) : ''}</p></header>
+<div class="noprint"><button onclick="print()">${t('Imprimer / PDF')}</button></div>
+<header><h1>${t('Couverture de détection : {name}', { name: esc(state.name) })}</h1>
+<p>${date} · ${t('Référentiel MITRE ATT&amp;CK Enterprise v{v}', { v: esc(attack.version) })}${profile.length ? ' · ' + esc(profile.join(' · ')) : ''}</p></header>
 <main>
-<h2>Synthèse</h2>
-<div class="kpis">${kpi(A.pct + ' %', 'des techniques des scénarios couvertes', 'cov')}${kpi(state.scenarios.length, 'scénarios de menace')}${kpi(state.rules.length, `règles analysées (${validated} validées)`)}${kpi(A.tot.cov, 'techniques couvertes', 'cov')}${kpi(A.tot.part, 'techniques partielles', 'part')}${kpi(A.tot.gap, 'écarts de détection', 'gap')}</div>
-<p>Sur les ${A.nTech} techniques ATT&amp;CK mobilisées par les ${state.scenarios.length} scénarios retenus${c.assets ? ` (actifs clés : ${esc(c.assets)})` : ''}, ${A.tot.cov} sont couvertes par au moins une règle fiable, ${A.tot.part} le sont partiellement et ${A.tot.gap} ne disposent d'aucune détection.${A.gaps.length ? ` Les ${Math.min(5, A.gaps.length)} actions prioritaires portent sur ${A.gaps.slice(0, 5).map(g => `${g.id} (${esc(g.name)})`).join(', ')}.` : ''}</p>
+<h2>${t('Synthèse')}</h2>
+<div class="kpis">${kpi(A.pct + ' %', t('des techniques des scénarios couvertes'), 'cov')}${kpi(state.scenarios.length, t('scénarios de menace'))}${kpi(state.rules.length, t('règles analysées ({n} validées)', { n: validated }))}${kpi(A.tot.cov, t('techniques couvertes'), 'cov')}${kpi(A.tot.part, t('techniques partielles'), 'part')}${kpi(A.tot.gap, t('écarts de détection'), 'gap')}</div>
+<p>${t('Sur les {n} techniques ATT&amp;CK mobilisées par les {s} scénarios retenus{assets}, {cov} sont couvertes par au moins une règle fiable, {part} le sont partiellement et {gap} ne disposent d’aucune détection.', { n: A.nTech, s: state.scenarios.length, assets: c.assets ? t(' (actifs clés : {a})', { a: esc(c.assets) }) : '', cov: A.tot.cov, part: A.tot.part, gap: A.tot.gap })}${A.gaps.length ? ' ' + t('Les {n} actions prioritaires portent sur {list}.', { n: Math.min(5, A.gaps.length), list: A.gaps.slice(0, 5).map(g => `${g.id} (${esc(g.name)})`).join(', ') }) : ''}</p>
 
-<h2>Couverture par scénario</h2>
-<table><thead><tr><th>Réf</th><th>Scénario</th><th>Priorité</th><th>Couverture</th><th></th><th>Détail</th></tr></thead><tbody>
-${A.scen.map(({ s, c: n, pct }) => `<tr><td><span class="ref">${sref(s)}</span></td><td><b>${esc(s.name)}</b>${s.actors ? `<div class="mut">${esc(s.actors)}</div>` : ''}</td><td>${prio(s.priority)}</td><td>${bar(n)}</td><td><b>${pct} %</b></td><td class="mut">${n.cov} couvertes, ${n.part} partielles, ${n.gap} écarts</td></tr>`).join('')}
+<h2>${t('Couverture par scénario')}</h2>
+<table><thead><tr><th>${t('Réf')}</th><th>${t('Scénario')}</th><th>${t('Priorité')}</th><th>${t('Couverture')}</th><th></th><th>${t('Détail')}</th></tr></thead><tbody>
+${A.scen.map(({ s, c: n, pct }) => `<tr><td><span class="ref">${sref(s)}</span></td><td><b>${esc(s.name)}</b>${s.actors ? `<div class="mut">${esc(s.actors)}</div>` : ''}</td><td>${prio(s.priority)}</td><td>${bar(n)}</td><td><b>${pct} %</b></td><td class="mut">${t('{c} couvertes, {p} partielles, {g} écarts', { c: n.cov, p: n.part, g: n.gap })}</td></tr>`).join('')}
 </tbody></table>
 
-<h2>Écarts prioritaires et recommandations</h2>
-${A.gaps.length ? `<table><thead><tr><th>Technique</th><th>Statut</th><th>Priorité</th><th>Scénarios</th><th>Recommandation</th></tr></thead><tbody>
+<h2>${t('Écarts prioritaires et recommandations')}</h2>
+${A.gaps.length ? `<table><thead><tr><th>${t('Technique')}</th><th>${t('Statut')}</th><th>${t('Priorité')}</th><th>${t('Scénarios')}</th><th>${t('Recommandation')}</th></tr></thead><tbody>
 ${A.gaps.map(g => `<tr><td><b>${g.id}</b> ${esc(g.name)}</td><td class="st ${g.k}">${LBL[g.k]}</td><td>${prio(['high', 'medium', 'low'][g.p])}</td><td>${g.scs.map(s => `<span class="ref" title="${esc(s.name)}">${sref(s)}</span>`).join(' ')}</td><td>${esc(reco(A, g))}</td></tr>`).join('')}
-</tbody></table>` : '<p>Aucun écart : toutes les techniques des scénarios sont couvertes.</p>'}
+</tbody></table>` : `<p>${t('Aucun écart : toutes les techniques des scénarios sont couvertes.')}</p>`}
 
-<section class="pg-matrix"><h2>Matrice ATT&amp;CK</h2>
-<p class="legend"><span><i style="background:var(--cov)"></i>Couvert</span><span><i style="background:var(--partb);border:1px solid var(--part)"></i>Partiel</span><span><i style="background:var(--gapb);border:1px solid var(--gap)"></i>Écart (technique d'un scénario)</span><span><i style="background:#fff;box-shadow:inset 3px 0 0 var(--ind);border:1px solid var(--line)"></i>Technique d'un scénario</span></p>
+<section class="pg-matrix"><h2>${t('Matrice ATT&amp;CK')}</h2>
+<p class="legend"><span><i style="background:var(--cov)"></i>${t('Couvert')}</span><span><i style="background:var(--partb);border:1px solid var(--part)"></i>${t('Partiel')}</span><span><i style="background:var(--gapb);border:1px solid var(--gap)"></i>${t('Écart (technique d’un scénario)')}</span><span><i style="background:#fff;box-shadow:inset 3px 0 0 var(--ind);border:1px solid var(--line)"></i>${t('Technique d’un scénario')}</span></p>
 <div class="matrix">${cols}</div></section>
 
-<h2>Inventaire des règles</h2>
-<table><thead><tr><th>Règle</th><th>Techniques</th><th>Scénarios</th><th>Étape</th><th>Confiance</th><th>Origine</th><th>Validée</th></tr></thead><tbody>
-${state.rules.map(r => `<tr><td><b>${esc(r.name)}</b><div class="mut">${esc(r.source)}</div></td><td>${r.techniques.map(t => `<span title="${esc(name(t))}">${t}</span>`).join(', ')}</td><td>${r.scenarios.map(scName).filter(Boolean).map(s => `<span class="ref">${sref(s)}</span>`).join(' ')}</td><td>${esc(r.stage || '')}</td><td>${esc(r.confidence || '')}</td><td>${r.by === 'tags' ? 'tags' : r.by === 'ia' ? 'IA' : ''}</td><td>${r.reviewed ? 'oui' : 'non'}</td></tr>`).join('')}
+<h2>${t('Inventaire des règles')}</h2>
+<table><thead><tr><th>${t('Règle')}</th><th>${t('Techniques')}</th><th>${t('Scénarios')}</th><th>${t('Étape')}</th><th>${t('Confiance')}</th><th>${t('Origine')}</th><th>${t('Validée')}</th></tr></thead><tbody>
+${state.rules.map(r => `<tr><td><b>${esc(r.name)}</b><div class="mut">${esc(r.source)}</div></td><td>${r.techniques.map(id => `<span title="${esc(name(id))}">${id}</span>`).join(', ')}</td><td>${r.scenarios.map(scName).filter(Boolean).map(s => `<span class="ref">${sref(s)}</span>`).join(' ')}</td><td>${esc(r.stage || '')}</td><td>${esc(r.confidence || '')}</td><td>${origin(r)}</td><td>${yesNo(r.reviewed)}</td></tr>`).join('')}
 </tbody></table>
 
-<h2>Méthode et limites</h2>
+<h2>${t('Méthode et limites')}</h2>
 <ul>
-<li>Scénarios dérivés de sources CTI et du profil client ; techniques validées contre le référentiel MITRE ATT&amp;CK Enterprise v${esc(attack.version)}.</li>
-<li>Règles mappées à partir de leurs tags ATT&amp;CK quand ils existent, sinon par analyse assistée par IA ; ${validated}/${state.rules.length} règles relues et validées par un analyste.</li>
-<li><b>Couvert</b> : règle de confiance moyenne ou haute sur la technique, ou sur toutes ses sous-techniques. <b>Partiel</b> : seulement certaines sous-techniques, confiance basse, ou seule la technique parente. <b>Écart</b> : aucune règle.</li>
-<li>La couverture mesure l'existence de détections, pas leur efficacité opérationnelle (qualité des journaux, taux de faux positifs, délais de traitement).</li>
+<li>${t('Scénarios dérivés de sources CTI et du profil client ; techniques validées contre le référentiel MITRE ATT&amp;CK Enterprise v{v}.', { v: esc(attack.version) })}</li>
+<li>${t('Règles mappées à partir de leurs tags ATT&amp;CK quand ils existent, sinon par analyse assistée par IA ; {n}/{m} règles relues et validées par un analyste.', { n: validated, m: state.rules.length })}</li>
+<li>${t('<b>Couvert</b> : règle de confiance moyenne ou haute sur la technique, ou sur toutes ses sous-techniques. <b>Partiel</b> : seulement certaines sous-techniques, confiance basse, ou seule la technique parente. <b>Écart</b> : aucune règle.')}</li>
+<li>${t('La couverture mesure l’existence de détections, pas leur efficacité opérationnelle (qualité des journaux, taux de faux positifs, délais de traitement).')}</li>
 </ul>
-<p class="mut">Généré par MITREMapper (Wavestone) le ${date}.</p>
+<p class="mut">${t('Généré par MITREMapper (Wavestone) le {date}.', { date })}</p>
 </main></body></html>`;
 }

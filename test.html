@@ -92,6 +92,17 @@ t('couche Navigator du scénario (scores partiel 2, couvert 3, écart 1)', layer
 state.scenarios = sc1; state.rules = ru1;
 const zb = new Uint8Array(await zip({ 'a.txt': 'abc' }).arrayBuffer());
 t('zip : en-tête local et fin de répertoire central', zb[0] === 0x50 && zb[1] === 0x4b && zb[2] === 3 && new DataView(zb.buffer).getUint32(zb.length - 22, true) === 0x06054b50);
+// --- i18n : chaque t('…') du code a sa traduction anglaise, avec les mêmes variables ---
+const { t: tr, EN } = await import('./js/i18n.js');
+t('i18n : français par défaut, variables', tr('{n} sur {m}', { n: 2, m: 3 }) === '2 sur 3');
+const used = new Set();
+for (const f of ['app', 'coverage', 'export', 'llm', 'mapping', 'scenarios', 'settings', 'store', 'ui'])
+  for (const m of (await (await fetch(`js/${f}.js`, { cache: 'no-cache' })).text()).matchAll(/\bt\((['"])((?:(?!\1).)*)\1/g)) used.add(m[2]);
+const missing = [...used].filter(k => !(k in EN));
+if (missing.length) o.textContent += `Traductions manquantes : ${missing.join(' | ')}\n`;
+t(`i18n : toutes les chaînes ont une traduction anglaise (${used.size})`, !missing.length);
+const ph = k => (k.match(/\{\w+\}/g) || []).sort().join();
+t('i18n : mêmes variables en FR et EN', Object.entries(EN).every(([k, v]) => ph(k) === ph(v)));
 localStorage.clear(); for (const [k, v] of Object.entries(backup)) localStorage.setItem(k, v);
 const fails = (o.textContent.match(/^FAIL/gm) || []).length, oks = (o.textContent.match(/^OK/gm) || []).length;
 o.textContent += `

@@ -109,6 +109,8 @@ label.chk input{width:auto;min-height:0;margin-top:.2rem}
 .pill{font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;background:var(--ink-100);color:var(--mut)}
 .pill.ok{background:var(--green-50);color:var(--green-700)}.pill.warn{background:var(--amber-bg);color:#8A4800}.pill.error{background:var(--red-bg);color:#a02a29}.pill.busy{background:var(--indigo-50);color:var(--indigo-800)}
 [hidden]{display:none!important}
+.lang{margin-left:.8rem;padding:4px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.3);background:transparent;color:rgba(255,255,255,.85);font-size:12px;font-weight:500}
+.lang:hover{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.6);color:#fff}
 
 </style>
 </head>
@@ -118,6 +120,7 @@ label.chk input{width:auto;min-height:0;margin-top:.2rem}
   <nav id="tabs"></nav>
   <span id="proj" title="Projet courant (Paramètres → Projets)"></span>
   <span id="ver"></span>
+  <button id="lang" class="lang"></button>
 </header>
 <main id="view"></main>
 <footer>MITREMapper · Wavestone — Outil d'aide à la couverture de détection ATT&amp;CK · Les propositions du LLM sont à relire</footer>
@@ -174,14 +177,153 @@ const setAuthorized = on => { try { on ? sessionStorage.setItem(OK, '1') : sessi
 
 return { getKey, isRemembered, setKey, clearKeys, mask, isAuthorized, setAuthorized };
 })();
+__m.i18n = (() => {
+// Interface bilingue FR (langue source) / EN. Clé = texte français, {x} = variable.
+// Toute chaîne passée à t('…') doit avoir sa traduction dans EN (vérifié par test.html). Changer de langue recharge la page.
+const KEY = 'mitremapper.lang';
+const lang = (() => { try { return localStorage.getItem(KEY) === 'en' ? 'en' : 'fr'; } catch { return 'fr'; } })();
+const locale = lang === 'en' ? 'en-GB' : 'fr-FR';
+const setLang = l => { try { localStorage.setItem(KEY, l); } catch {} };
+const t = (s, v = {}) => (lang === 'en' ? EN[s] ?? s : s).replace(/\{(\w+)\}/g, (m, k) => (k in v ? v[k] : m));
+
+const EN = {
+  // navigation, en-tête
+  'Scénarios': 'Scenarios', 'Règles': 'Rules', 'Couverture': 'Coverage', 'Paramètres': 'Settings',
+  'MITREMapper · Wavestone — Outil d’aide à la couverture de détection ATT&CK · Les propositions du LLM sont à relire': 'MITREMapper · Wavestone — ATT&CK detection coverage assistant · LLM suggestions must be reviewed',
+  'Projet courant (Paramètres → Projets)': 'Current project (Settings → Projects)',
+  // statuts
+  'couvert': 'covered', 'partiel': 'partial', 'écart': 'gap', 'Couvert': 'Covered', 'Partiel': 'Partial', 'Écart': 'Gap',
+  'Couvertes': 'Covered', 'Partielles': 'Partial', 'Écarts': 'Gaps',
+  // couverture
+  'Toutes les techniques': 'All techniques', 'Techniques des scénarios': 'Scenario techniques', 'Écarts uniquement': 'Gaps only', 'Couvertes uniquement': 'Covered only',
+  '{c} couvertes, {p} partielles, {g} écarts': '{c} covered, {p} partial, {g} gaps',
+  'Aucune donnée.': 'No data.', 'Génère des scénarios et mappe des règles, ou': 'Generate scenarios and map rules, or', 'charge la démo complète': 'load the full demo',
+  'Rapport client (PDF)': 'Client report (PDF)', 'Rapport (HTML)': 'Report (HTML)', 'Classeur Excel': 'Excel workbook', 'Couche Navigator': 'Navigator layer',
+  'Couches Navigator par scénario (.zip)': 'Navigator layers per scenario (.zip)', 'CSV (règles)': 'CSV (rules)',
+  '{r} règles · {s} scénarios · {n} techniques de scénario': '{r} rules · {s} scenarios · {n} scenario techniques',
+  'Matrice ATT&CK': 'ATT&CK matrix', 'Matrice ATT&amp;CK': 'ATT&amp;CK matrix',
+  'Chercher T1059 ou « credential »': 'Search T1059 or “credential”', 'Chercher une technique': 'Search a technique',
+  'Scénario': 'Scenario', 'Tous les scénarios': 'All scenarios', 'Afficher': 'Show', 'Couverture par scénario': 'Coverage by scenario',
+  'Techniques': 'Techniques', 'Technique': 'Technique', 'Aucun scénario': 'No scenario', 'Écarts priorisés': 'Prioritised gaps', 'Statut': 'Status',
+  'Scénarios concernés': 'Related scenarios', 'Aucun écart': 'No gap', 'Techniques de scénario couvertes dans cette tactique': 'Scenario techniques covered in this tactic',
+  'Aucune technique ne correspond à ces filtres.': 'No technique matches these filters.', 'Hors scénarios': 'Outside scenarios',
+  'Écart : aucune règle': 'Gap: no rule', 'Non couvert, hors scénarios': 'Not covered, outside scenarios',
+  'Aucune règle ne cible cette technique.': 'No rule targets this technique.', 'Aucun scénario ne l’utilise.': 'No scenario uses it.', 'Aucune.': 'None.', 'Aucun.': 'None.',
+  'Fermer': 'Close', 'Fiche MITRE': 'MITRE page', 'Sous-techniques ({n}/{m} couvertes)': 'Sub-techniques ({n}/{m} covered)',
+  'Fenêtre bloquée : autorise les pop-ups ou utilise « Rapport (HTML) ».': 'Window blocked: allow pop-ups or use “Report (HTML)”.',
+  'rapport': 'report', 'règle,source,techniques,scénarios,étape,confiance,note': 'rule,source,techniques,scenarios,stage,confidence,note',
+  // livrables
+  'Haute': 'High', 'Moyenne': 'Medium', 'Basse': 'Low', 'oui': 'yes', 'non': 'no', 'IA': 'AI',
+  'Aucune détection : créer une règle pour cette technique.': 'No detection: create a rule for this technique.',
+  'Seule la technique parente est couverte : vérifier que la détection couvre cette sous-technique.': 'Only the parent technique is covered: check that the detection covers this sub-technique.',
+  'Détection de confiance basse : renforcer ou compléter la règle existante.': 'Low-confidence detection: strengthen or extend the existing rule.',
+  'Sous-techniques couvertes : {n}/{m} ; compléter les variantes utilisées par les scénarios.': 'Sub-techniques covered: {n}/{m}; cover the variants used by the scenarios.',
+  'Couverture globale : score = meilleure confiance des règles (1 basse, 2 moyenne, 3 haute)': 'Overall coverage: score = best rule confidence (1 low, 2 medium, 3 high)',
+  'Scénario {ref}, priorité {p} : 3 couvert, 2 partiel, 1 écart': 'Scenario {ref}, priority {p}: 3 covered, 2 partial, 1 gap',
+  'aucune règle': 'no rule', 'Synthèse': 'Summary', 'Indicateur': 'Indicator', 'Valeur': 'Value', 'Projet': 'Project', 'Date': 'Date', 'Référentiel': 'Framework',
+  'Secteur': 'Sector', 'Taille': 'Size', 'Pays / zones': 'Countries / regions', 'Actifs clés': 'Key assets', 'Règles validées': 'Reviewed rules',
+  'Techniques de scénario': 'Scenario techniques', 'Couverture globale (%)': 'Overall coverage (%)', 'Réf': 'Ref', 'Priorité': 'Priority', 'Acteurs': 'Actors',
+  'Résumé': 'Summary', 'Couverture (%)': 'Coverage (%)', 'Règles liées': 'Linked rules', 'Nom': 'Name', 'Recommandation': 'Recommendation', 'Règle': 'Rule',
+  'Source': 'Source', 'Origine': 'Origin', 'Étape': 'Stage', 'Confiance': 'Confidence', 'Validée': 'Reviewed', 'Note': 'Note', 'Tactiques': 'Tactics',
+  'Dans un scénario': 'In a scenario', 'Nb règles': 'No. of rules',
+  'Couverture de détection : {name}': 'Detection coverage: {name}', 'Imprimer / PDF': 'Print / PDF',
+  'Référentiel MITRE ATT&amp;CK Enterprise v{v}': 'MITRE ATT&amp;CK Enterprise v{v}',
+  'des techniques des scénarios couvertes': 'of scenario techniques covered', 'scénarios de menace': 'threat scenarios', 'règles analysées ({n} validées)': 'rules analysed ({n} reviewed)',
+  'techniques couvertes': 'covered techniques', 'techniques partielles': 'partially covered techniques', 'écarts de détection': 'detection gaps',
+  'Sur les {n} techniques ATT&amp;CK mobilisées par les {s} scénarios retenus{assets}, {cov} sont couvertes par au moins une règle fiable, {part} le sont partiellement et {gap} ne disposent d’aucune détection.':
+    'Of the {n} ATT&amp;CK techniques used by the {s} selected scenarios{assets}, {cov} are covered by at least one reliable rule, {part} are partially covered and {gap} have no detection.',
+  ' (actifs clés : {a})': ' (key assets: {a})', 'Les {n} actions prioritaires portent sur {list}.': 'The {n} priority actions concern {list}.',
+  'Détail': 'Detail', 'Écarts prioritaires et recommandations': 'Priority gaps and recommendations',
+  'Aucun écart : toutes les techniques des scénarios sont couvertes.': 'No gap: all scenario techniques are covered.',
+  'Écart (technique d’un scénario)': 'Gap (scenario technique)', 'Technique d’un scénario': 'Scenario technique', 'Inventaire des règles': 'Rule inventory', 'Méthode et limites': 'Method and limitations',
+  'Scénarios dérivés de sources CTI et du profil client ; techniques validées contre le référentiel MITRE ATT&amp;CK Enterprise v{v}.': 'Scenarios derived from CTI sources and the client profile; techniques validated against MITRE ATT&amp;CK Enterprise v{v}.',
+  'Règles mappées à partir de leurs tags ATT&amp;CK quand ils existent, sinon par analyse assistée par IA ; {n}/{m} règles relues et validées par un analyste.': 'Rules mapped from their ATT&amp;CK tags when present, otherwise through AI-assisted analysis; {n}/{m} rules reviewed and validated by an analyst.',
+  '<b>Couvert</b> : règle de confiance moyenne ou haute sur la technique, ou sur toutes ses sous-techniques. <b>Partiel</b> : seulement certaines sous-techniques, confiance basse, ou seule la technique parente. <b>Écart</b> : aucune règle.':
+    '<b>Covered</b>: medium or high confidence rule on the technique, or on all of its sub-techniques. <b>Partial</b>: only some sub-techniques, low confidence, or only the parent technique. <b>Gap</b>: no rule.',
+  'La couverture mesure l’existence de détections, pas leur efficacité opérationnelle (qualité des journaux, taux de faux positifs, délais de traitement).': 'Coverage measures whether detections exist, not their operational effectiveness (log quality, false positive rate, response times).',
+  'Généré par MITREMapper (Wavestone) le {date}.': 'Generated by MITREMapper (Wavestone) on {date}.',
+  // LLM
+  'modèle non défini': 'model not set', 'Utilisation de l’IA non autorisée : coche la case de confirmation dans Paramètres.': 'AI use not authorised: tick the confirmation box in Settings.',
+  'Fournisseur inconnu.': 'Unknown provider.', 'Clé API manquante pour {p}.': 'Missing API key for {p}.', 'URL de base invalide : « {u} ».': 'Invalid base URL: “{u}”.',
+  'L’endpoint doit être en HTTPS (HTTP admis seulement en local : 127.0.0.1 ou localhost).': 'The endpoint must use HTTPS (HTTP is only allowed locally: 127.0.0.1 or localhost).',
+  'Nom du déploiement Azure manquant.': 'Missing Azure deployment name.', 'Version d’API Azure manquante.': 'Missing Azure API version.', 'Modèle manquant.': 'Missing model.',
+  'Connexion impossible à {h} (réseau ou CORS : le serveur doit autoriser l’origine {o}).': 'Cannot connect to {h} (network or CORS: the server must allow origin {o}).',
+  'Réponse non JSON du fournisseur : {x}': 'Non-JSON response from provider: {x}', 'Liste de secours : {r}': 'Fallback list: {r}',
+  'Azure ne liste pas les déploiements ici : saisis le nom du déploiement.': 'Azure deployments cannot be listed here: enter the deployment name.',
+  'Chargement des modèles…': 'Loading models…', 'Liste de modèles vide.': 'Empty model list.', '{n} modèles chargés': '{n} models loaded',
+  '{p} · {m} : appel en cours…': '{p} · {m}: request in progress…', 'Réponse vide du fournisseur.': 'Empty response from provider.', 'Aucun JSON dans la réponse': 'No JSON in the response',
+  'Local / proxy compatible OpenAI': 'Local / OpenAI-compatible proxy', 'Endpoint générique compatible OpenAI': 'Generic OpenAI-compatible endpoint', 'Ollama (local)': 'Ollama (local)',
+  // règles
+  'Lien automatique : technique commune {ids}.': 'Automatic link: shared technique {ids}.', 'Techniques lues dans les tags de la règle (sans IA).': 'Techniques read from the rule tags (no AI).',
+  'règle': 'rule', 'Toutes': 'All', 'À relire': 'To review', 'Suspects': 'Suspicious', 'Oublis possibles': 'Possible misses', 'Sans scénario': 'No scenario',
+  'Trop larges': 'Too broad', 'Confiance basse': 'Low confidence', 'Divergence tags / IA': 'Tags / AI divergence', 'Importer des règles': 'Import rules',
+  'Coller des règles ou de la documentation. Séparer plusieurs règles par une ligne --- (YAML Sigma multi-documents OK).': 'Paste rules or documentation. Separate rules with a --- line (multi-document Sigma YAML is fine).',
+  'Charger les règles d’exemple': 'Load sample rules', 'Ajouter le texte collé': 'Add pasted text', 'Ou fichiers': 'Or files',
+  'Un fichier = une ou plusieurs règles (séparateur ---) ; un .json contenant un tableau = une règle par élément.': 'One file = one or more rules (--- separator); a .json array = one rule per item.',
+  'Mapper les règles non traitées': 'Map unprocessed rules', 'Tout remapper': 'Remap all',
+  'Faire aussi relire par l’IA les règles qui ont des tags ATT&amp;CK (détecte les divergences entre tags déclarés et logique de la règle)': 'Also have AI review rules that have ATT&amp;CK tags (detects divergences between declared tags and rule logic)',
+  'Les règles qui déclarent leurs techniques (tags Sigma <code>attack.t…</code>, champs MITRE des exports SIEM/EDR) sont mappées sans IA ; l’IA ne traite que les autres.': 'Rules that declare their techniques (Sigma tags <code>attack.t…</code>, MITRE fields in SIEM/EDR exports) are mapped without AI; AI only handles the others.',
+  'Revue du mapping': 'Mapping review', 'Chercher règle ou technique': 'Search rule or technique', 'Chercher': 'Search',
+  '<b>●</b> lié, techniques en commun · <b class="err">⚠</b> lié sans technique commune (à challenger) · <b style="color:var(--amber)">◌</b> non lié mais technique en commun (oubli possible) · clic sur une cellule = lier / délier · clic sur une ligne = détail':
+    '<b>●</b> linked, shared techniques · <b class="err">⚠</b> linked without shared technique (to challenge) · <b style="color:var(--amber)">◌</b> not linked but shared technique (possible miss) · click a cell = link / unlink · click a row = detail',
+  'IA non autorisée : seules les règles avec tags ATT&amp;CK seront mappées (autorisation dans Paramètres).': 'AI not authorised: only rules with ATT&amp;CK tags will be mapped (authorisation in Settings).',
+  'Retirer {id}': 'Remove {id}', '{n}/{m} validées': '{n}/{m} reviewed', '{name} ({prio}) : trier par ce scénario': '{name} ({prio}): sort by this scenario',
+  'Règle validée': 'Rule reviewed', 'via tags': 'via tags', 'via IA': 'via AI', 'rejetés : {ids}': 'rejected: {ids}',
+  'Aucune règle ne correspond à ces filtres.': 'No rule matches these filters.', 'Aucune règle : importe-en ci-dessus.': 'No rules: import some above.',
+  'Techniques sans règle liée': 'Techniques without linked rule', '{n} sur {m}': '{n} of {m}', 'Note du LLM': 'LLM note', 'Scénarios liés': 'Linked scenarios',
+  '⚠ aucune technique commune': '⚠ no shared technique', 'Pas de justification (remapper pour en obtenir une).': 'No justification (remap to get one).',
+  'Délier': 'Unlink', 'Aucun scénario lié.': 'No linked scenario.', 'Lier': 'Link', 'Tags déclarés dans la règle :': 'Tags declared in the rule:',
+  'tags seuls :': 'tags only:', 'IA seule :': 'AI only:', 'Utiliser les tags': 'Use the tags', 'Ajouter': 'Add', 'ID inconnu : {ids}': 'Unknown ID: {ids}',
+  'Qualification': 'Qualification', 'Supprimer la règle': 'Delete rule', 'Supprimer cette règle ?': 'Delete this rule?', 'exemple.yml': 'sample.yml', 'collé': 'pasted',
+  'Rien à mapper.': 'Nothing to map.', '{n} règle(s) mappée(s) depuis leurs tags, sans IA.': '{n} rule(s) mapped from their tags, without AI.',
+  '{n} règle(s) mappée(s) depuis leurs tags. {m} règle(s) restante(s) nécessitent l’IA : coche l’autorisation dans Paramètres.': '{n} rule(s) mapped from their tags. {m} remaining rule(s) need AI: tick the authorisation in Settings.',
+  'Lot {i}/{n}…': 'Batch {i}/{n}…', '{n} règle(s) mappée(s) depuis leurs tags ; {m} règle(s) traitée(s) par l’IA.': '{n} rule(s) mapped from their tags; {m} rule(s) processed by AI.',
+  // scénarios
+  'Profil client': 'Client profile', 'Actifs / contraintes clés': 'Key assets / constraints', 'Sources CTI (rapports, tendances)': 'CTI sources (reports, trends)',
+  'Coller le texte des rapports de menace…': 'Paste threat report text…', 'Ajouter des fichiers texte': 'Add text files', 'Charger l’exemple': 'Load sample',
+  'Générer les scénarios': 'Generate scenarios', 'remplacer l’existant': 'replace existing', '+ Scénario manuel': '+ Manual scenario',
+  'Santé (hôpitaux)': 'Healthcare (hospitals)', 'ETI, 3 000 employés': 'Mid-size company, 3,000 employees', 'France / Europe': 'France / Europe',
+  'SI hospitalier, serveurs ESXi, dossiers patients': 'Hospital IS, ESXi servers, patient records',
+  'Techniques (IDs, séparés par des virgules)': 'Techniques (IDs, comma-separated)', 'Résumé / justification': 'Summary / rationale', 'IDs rejetés : {ids}': 'Rejected IDs: {ids}',
+  'Supprimer': 'Delete', 'Nouveau scénario': 'New scenario', 'Ajoute du contenu CTI.': 'Add some CTI content.', 'Appel LLM…': 'Calling LLM…',
+  // paramètres
+  'Projets': 'Projects', 'Nom du projet courant': 'Current project name', 'Ouvrir un projet': 'Open a project', 'Nouveau projet': 'New project',
+  'Supprimer le projet courant': 'Delete current project', 'Vider le projet courant': 'Clear current project', 'Exporter le projet (JSON)': 'Export project (JSON)',
+  'Importer comme nouveau projet': 'Import as new project', 'Ouvrir la démo complète (sans LLM)': 'Open the full demo (no LLM)',
+  'Nouveau projet avec scénarios et règles d’exemple déjà mappés : prêt pour la matrice en un clic.': 'New project with sample scenarios and rules already mapped: matrix ready in one click.',
+  'Les projets sont enregistrés dans ce navigateur ; exporter en JSON pour les sauvegarder ou les partager (les clés API ne sont jamais exportées).': 'Projects are stored in this browser; export to JSON to back them up or share them (API keys are never exported).',
+  'Utilisation de l’IA': 'AI use',
+  'Je confirme que l’usage de l’IA est autorisé pour ce contenu et conforme aux règles du client. Aucun appel IA (génération, mapping, liste des modèles, test) n’est envoyé tant que cette case n’est pas cochée ; elle est à reconfirmer à chaque session.': 'No AI call (generation, mapping, model listing, test) is sent until this box is ticked; it must be confirmed again in each session.',
+  'Endpoint LLM': 'LLM endpoint', 'Fournisseur': 'Provider', 'Modèle': 'Model', 'Déploiement': 'Deployment', 'Version d’API': 'API version', 'Température': 'Temperature',
+  'Règles par lot': 'Rules per batch', 'Mémoriser cette clé sur ce navigateur': 'Remember this key on this browser',
+  'Par défaut la clé reste en mémoire de session (effacée à la fermeture de l’onglet) et n’est jamais exportée ni enregistrée avec le projet. Elle n’est envoyée qu’à l’URL ci-dessus (HTTPS exigé, sauf en local). Le serveur doit autoriser CORS pour {origin} (Ollama : variable {var}).':
+    'By default the key stays in session memory (cleared when the tab closes) and is never exported or saved with the project. It is only sent to the URL above (HTTPS required, except locally). The server must allow CORS for {origin} (Ollama: {var} variable).',
+  'Lister les modèles': 'List models', 'Tester la connexion': 'Test connection', 'Effacer les clés API': 'Clear API keys', 'Stratégie de détection': 'Detection strategy',
+  'Étapes (une par ligne)': 'Stages (one per line)', 'Non testé': 'Not tested', 'En cours…': 'In progress…', 'Liste de secours': 'Fallback list', 'Erreur': 'Error',
+  'Endpoint HTTPS Azure (https://<ressource>.openai.azure.com)': 'Azure HTTPS endpoint (https://<resource>.openai.azure.com)', 'URL de base': 'Base URL',
+  'Clé API (requise)': 'API key (required)', 'Clé API (optionnelle)': 'API key (optional)', 'Clé enregistrée {mask}': 'Saved key {mask}',
+  'Liste de secours (chargement impossible : {r})': 'Fallback list (loading failed: {r})', '{n} modèles chargés (voir le champ Modèle).': '{n} models loaded (see the Model field).',
+  'Effacer toutes les clés API de ce navigateur (session et mémorisées) ?': 'Clear all API keys from this browser (session and remembered)?', 'Clés API effacées.': 'API keys cleared.',
+  'Connexion OK : {r}': 'Connection OK: {r}', 'Projet sans nom': 'Untitled project', 'Nom du nouveau projet': 'New project name',
+  'Supprimer définitivement le projet « {name} » de ce navigateur ?': 'Permanently delete project “{name}” from this browser?',
+  'Vider le projet « {name} » (scénarios, règles, CTI) ?': 'Clear project “{name}” (scenarios, rules, CTI)?',
+  // store, ui
+  'Projet introuvable': 'Project not found', 'Fichier projet invalide': 'Invalid project file', 'Projet importé': 'Imported project', 'Exemple introuvable : {f}': 'Sample not found: {f}',
+  'Démo : établissement de santé': 'Demo: healthcare organisation', 'Annuler': 'Cancel', 'Terminé': 'Done', 'Annulé': 'Cancelled',
+  'Usage de l’IA non autorisé': 'AI use not authorised', 'IA non autorisée : coche la case de confirmation dans Paramètres.': 'AI not authorised: tick the confirmation box in Settings.',
+};
+
+return { lang, locale, setLang, t, EN };
+})();
 __m.store = (() => {
 const { setKey } = __m.keys;
+const { t, lang } = __m.i18n;
 const KEY = 'mitremapper.v1';                         // projet courant + réglages
 const LIB = 'mitremapper.lib', LIBP = 'mitremapper.lib.'; // index des projets + données de chaque projet (sans réglages)
-const DEFAULT_STAGES = ['Prévention', 'Détection', 'Investigation', 'Réponse'];
+const DEFAULT_STAGES = lang === 'en' ? ['Prevention', 'Detection', 'Investigation', 'Response'] : ['Prévention', 'Détection', 'Investigation', 'Réponse'];
 const uid = () => Math.random().toString(36).slice(2, 9);
 const fresh = () => ({
-  pid: uid(), name: 'Projet sans nom', nextRef: 1,
+  pid: uid(), name: t('Projet sans nom'), nextRef: 1,
   client: { sector: '', size: '', country: '', assets: '' },
   cti: '', scenarios: [], rules: [],
   settings: { provider: 'local', base: 'http://127.0.0.1:11434/v1', model: 'auto', deployment: '', apiVersion: '2024-10-21', temperature: 0.2, batch: 8, stages: DEFAULT_STAGES },
@@ -228,10 +370,10 @@ function loadInto(d) {
 const listProjects = () => Object.entries(readLib()).map(([pid, p]) => ({ pid, ...p })).sort((a, b) => b.updated.localeCompare(a.updated));
 function openProject(pid) {
   const d = JSON.parse(localStorage.getItem(LIBP + pid) || 'null');
-  if (!d) throw new Error('Projet introuvable');
+  if (!d) throw new Error(t('Projet introuvable'));
   loadInto({ ...d, pid });
 }
-const newProject = name => loadInto({ pid: uid(), name: name || 'Nouveau projet' });
+const newProject = name => loadInto({ pid: uid(), name: name || t('Nouveau projet') });
 function deleteProject(pid) {
   const lib = readLib(); delete lib[pid];
   try { localStorage.setItem(LIB, JSON.stringify(lib)); localStorage.removeItem(LIBP + pid); } catch {}
@@ -247,19 +389,20 @@ const exportJson = (name, data) => download(name, new Blob([typeof data === 'str
 /** Importe un fichier projet comme NOUVEAU projet (le projet courant reste dans la bibliothèque). */
 function importProject(text, name) {
   const d = JSON.parse(text);
-  if (!d.scenarios || !d.rules) throw new Error('Fichier projet invalide');
-  loadInto({ ...d, pid: uid(), name: d.name && d.name !== 'Projet sans nom' ? d.name : name || 'Projet importé' });
+  if (!d.scenarios || !d.rules) throw new Error(t('Fichier projet invalide'));
+  loadInto({ ...d, pid: uid(), name: d.name && !['Projet sans nom', 'Untitled project'].includes(d.name) ? d.name : name || t('Projet importé') });
 }
 /** Charge un fichier de data/sample/ (démos rapides). */
-const sample = f => globalThis.__SAMPLES__?.[f] != null ? Promise.resolve(globalThis.__SAMPLES__[f]) : fetch('data/sample/' + f, { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error('Exemple introuvable : ' + f); return r.text(); });
+const sample = f => globalThis.__SAMPLES__?.[f] != null ? Promise.resolve(globalThis.__SAMPLES__[f]) : fetch('data/sample/' + f, { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(t('Exemple introuvable : {f}', { f })); return r.text(); });
 /** Démo complète sans LLM (scénarios + règles déjà mappés), ouverte dans un nouveau projet. */
-const loadDemo = async () => importProject(await sample('project.json'), 'Démo : établissement de santé');
+const loadDemo = async () => importProject(await sample('project.json'), t('Démo : établissement de santé'));
 
 return { DEFAULT_STAGES, uid, state, sref, projectForExport, save, listProjects, openProject, newProject, deleteProject, download, exportJson, importProject, sample, loadDemo };
 })();
 __m.ui = (() => {
 const { isAuthorized } = __m.keys;
 const { state } = __m.store;
+const { t } = __m.i18n;
 /** Affiche le nom du projet courant dans l'en-tête. */
 const showProject = () => { const e = document.getElementById('proj'); if (e) e.textContent = state.name; };
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -268,16 +411,16 @@ const readFiles = async files => Promise.all([...files].map(async f => ({ name: 
 /** Exécute fn(signal) avec bouton annuler + statut. */
 async function run(statusEl, fn) {
   const ac = new AbortController();
-  statusEl.innerHTML = '<span class="mut">En cours… </span><button>Annuler</button>';
+  statusEl.innerHTML = `<span class="mut">${t('En cours…')} </span><button>${t('Annuler')}</button>`;
   statusEl.querySelector('button').onclick = () => ac.abort();
-  try { const done = await fn(ac.signal, msg => statusEl.firstChild.textContent = msg + ' '); statusEl.innerHTML = `<span class="ok">${esc(done || 'Terminé')}</span>`; }
-  catch (e) { statusEl.innerHTML = e.name === 'AbortError' ? '<span class="mut">Annulé</span>' : `<span class="err">${esc(e.message)}</span>`; }
+  try { const done = await fn(ac.signal, msg => statusEl.firstChild.textContent = msg + ' '); statusEl.innerHTML = `<span class="ok">${esc(done || t('Terminé'))}</span>`; }
+  catch (e) { statusEl.innerHTML = e.name === 'AbortError' ? `<span class="mut">${t('Annulé')}</span>` : `<span class="err">${esc(e.message)}</span>`; }
 }
 /** Désactive les boutons IA tant que l'usage de l'IA n'est pas autorisé (Paramètres). */
 function gateAI(root, sels, statusSel) {
   if (isAuthorized()) return;
-  sels.forEach(q => { const b = $(root, q); b.disabled = true; b.title = 'Usage de l’IA non autorisé'; });
-  $(root, statusSel).innerHTML = '<span class="err">IA non autorisée : coche la case de confirmation dans Paramètres.</span>';
+  sels.forEach(q => { const b = $(root, q); b.disabled = true; b.title = t('Usage de l’IA non autorisé'); });
+  $(root, statusSel).innerHTML = `<span class="err">${t('IA non autorisée : coche la case de confirmation dans Paramètres.')}</span>`;
 }
 
 return { showProject, esc, $, readFiles, run, gateAI };
@@ -285,6 +428,7 @@ return { showProject, esc, $, readFiles, run, gateAI };
 __m.llm = (() => {
 const { state } = __m.store;
 const { getKey, isAuthorized } = __m.keys;
+const { t } = __m.i18n;
 /** Registre des fournisseurs. kind : protocole (openai | anthropic | azure). models : liste de secours si le chargement échoue. */
 const PROVIDERS = {
   local:       { label: 'Local / proxy compatible OpenAI', kind: 'openai',    base: 'http://127.0.0.1:11434/v1',  model: 'auto',                 keyRequired: false, models: ['auto'] },
@@ -312,7 +456,7 @@ const redact = (t, key) => {
   return s.replace(/Bearer\s+[\w.~+\/-]+=*/gi, 'Bearer ***').replace(/\bsk-[\w-]{8,}/g, 'sk-***');
 };
 function fail(ctx, msg, code, status) {
-  const ctxTxt = `${ctx.op} · ${PROVIDERS[ctx.provider]?.label || ctx.provider} · ${ctx.model || 'modèle non défini'}${status ? ' · HTTP ' + status : ''}${code ? ' · ' + code : ''}`;
+  const ctxTxt = `${ctx.op} · ${t(PROVIDERS[ctx.provider]?.label || ctx.provider)} · ${ctx.model || t('modèle non défini')}${status ? ' · HTTP ' + status : ''}${code ? ' · ' + code : ''}`;
   throw new LLMError(`[${ctxTxt}] ${redact(msg, ctx.key)}`, { ...ctx, status, code, key: undefined });
 }
 
@@ -321,17 +465,17 @@ const LOOPBACK = ['127.0.0.1', 'localhost', '[::1]'];
 function config(op) {
   const s = state.settings, p = PROVIDERS[s.provider];
   const ctx = { op, provider: s.provider, model: p?.kind === 'azure' ? s.deployment : s.model };
-  if (!isAuthorized()) fail(ctx, 'Utilisation de l’IA non autorisée : coche la case de confirmation dans Paramètres.', 'not_authorized');
-  if (!p) fail(ctx, 'Fournisseur inconnu.', 'bad_provider');
+  if (!isAuthorized()) fail(ctx, t('Utilisation de l’IA non autorisée : coche la case de confirmation dans Paramètres.'), 'not_authorized');
+  if (!p) fail(ctx, t('Fournisseur inconnu.'), 'bad_provider');
   const key = getKey(s.provider); ctx.key = key;
-  if (p.keyRequired && !key) fail(ctx, `Clé API manquante pour ${p.label}.`, 'missing_key');
+  if (p.keyRequired && !key) fail(ctx, t('Clé API manquante pour {p}.', { p: t(p.label) }), 'missing_key');
   let u;
-  try { u = new URL(String(s.base).trim()); } catch { fail(ctx, `URL de base invalide : « ${s.base} ».`, 'bad_url'); }
-  if (u.protocol !== 'https:' && !(u.protocol === 'http:' && LOOPBACK.includes(u.hostname))) fail(ctx, 'L’endpoint doit être en HTTPS (HTTP admis seulement en local : 127.0.0.1 ou localhost).', 'insecure_url');
+  try { u = new URL(String(s.base).trim()); } catch { fail(ctx, t('URL de base invalide : « {u} ».', { u: s.base }), 'bad_url'); }
+  if (u.protocol !== 'https:' && !(u.protocol === 'http:' && LOOPBACK.includes(u.hostname))) fail(ctx, t('L’endpoint doit être en HTTPS (HTTP admis seulement en local : 127.0.0.1 ou localhost).'), 'insecure_url');
   if (p.kind === 'azure') {
-    if (!String(s.deployment).trim()) fail(ctx, 'Nom du déploiement Azure manquant.', 'missing_deployment');
-    if (!String(s.apiVersion).trim()) fail(ctx, 'Version d’API Azure manquante.', 'missing_api_version');
-  } else if (op !== 'models' && !String(s.model).trim()) fail(ctx, 'Modèle manquant.', 'missing_model');
+    if (!String(s.deployment).trim()) fail(ctx, t('Nom du déploiement Azure manquant.'), 'missing_deployment');
+    if (!String(s.apiVersion).trim()) fail(ctx, t('Version d’API Azure manquante.'), 'missing_api_version');
+  } else if (op !== 'models' && !String(s.model).trim()) fail(ctx, t('Modèle manquant.'), 'missing_model');
   let base = (u.origin + u.pathname).replace(/\/+$/, '').replace(/\/(chat\/completions|v1\/messages)$/, '');
   if (p.kind === 'anthropic') base = base.replace(/\/v1$/, '');
   return { s, p, ctx, key, base };
@@ -349,12 +493,12 @@ async function http(ctx, url, opts) {
   try { r = await fetch(url, opts); }
   catch (e) {
     if (e.name === 'AbortError') throw e;
-    fail(ctx, `Connexion impossible à ${new URL(url).host} (réseau ou CORS : le serveur doit autoriser l’origine ${location.origin}).`, 'network');
+    fail(ctx, t('Connexion impossible à {h} (réseau ou CORS : le serveur doit autoriser l’origine {o}).', { h: new URL(url).host, o: location.origin }), 'network');
   }
   const text = await r.text();
   let j = null; try { j = JSON.parse(text); } catch {}
   if (!r.ok) fail(ctx, j?.error?.message || j?.message || (typeof j?.error === 'string' ? j.error : '') || text.slice(0, 300) || r.statusText, j?.error?.code || j?.error?.type || j?.code, r.status);
-  if (j === null) fail(ctx, 'Réponse non JSON du fournisseur : ' + text.slice(0, 120), 'bad_json', r.status);
+  if (j === null) fail(ctx, t('Réponse non JSON du fournisseur : {x}', { x: text.slice(0, 120) }), 'bad_json', r.status);
   return j;
 }
 
@@ -365,16 +509,16 @@ class LLMClient {
 
   /** Renvoie { models, fallback, reason } : liste du fournisseur, ou liste de secours si le chargement échoue. */
   async getAvailableModels() {
-    const fallback = (p, reason) => { this.#set('warn', `Liste de secours : ${reason}`); return { models: p?.models || [], fallback: true, reason }; };
+    const fallback = (p, reason) => { this.#set('warn', t('Liste de secours : {r}', { r: reason })); return { models: p?.models || [], fallback: true, reason }; };
     let c;
     try { c = config('models'); } catch (e) { if (e.code === 'not_authorized') throw e; return fallback(PROVIDERS[state.settings.provider], e.message); }
-    if (c.p.kind === 'azure') return fallback(c.p, 'Azure ne liste pas les déploiements ici : saisis le nom du déploiement.');
-    this.#set('busy', 'Chargement des modèles…');
+    if (c.p.kind === 'azure') return fallback(c.p, t('Azure ne liste pas les déploiements ici : saisis le nom du déploiement.'));
+    this.#set('busy', t('Chargement des modèles…'));
     try {
       const d = await http(c.ctx, c.p.kind === 'anthropic' ? `${c.base}/v1/models` : `${c.base}/models`, { headers: headers(c) });
       const ids = (d.data || d.models || []).map(m => m.id || m.name).filter(Boolean);
-      if (!ids.length) fail(c.ctx, 'Liste de modèles vide.', 'empty');
-      this.#set('ok', `${ids.length} modèles chargés`);
+      if (!ids.length) fail(c.ctx, t('Liste de modèles vide.'), 'empty');
+      this.#set('ok', t('{n} modèles chargés', { n: ids.length }));
       return { models: ids, fallback: false };
     } catch (e) {
       if (e.name === 'AbortError') { this.#set('idle', ''); throw e; }
@@ -392,7 +536,7 @@ class LLMClient {
 
   async #call(op, system, user, signal) {
     const c = config(op), { s, p } = c;
-    this.#set('busy', `${p.label} · ${c.ctx.model} : appel en cours…`);
+    this.#set('busy', t('{p} · {m} : appel en cours…', { p: t(p.label), m: c.ctx.model }));
     try {
       const T = +s.temperature;
       let url, body;
@@ -404,8 +548,8 @@ class LLMClient {
       }
       const d = await http(c.ctx, url, { method: 'POST', signal, headers: headers(c), body: JSON.stringify(body) });
       const text = p.kind === 'anthropic' ? (d.content || []).map(x => x.text || '').join('') : d.choices?.[0]?.message?.content;
-      if (!text || !String(text).trim()) fail(c.ctx, 'Réponse vide du fournisseur.', 'empty');
-      this.#set('ok', `${p.label} · ${c.ctx.model} : OK`);
+      if (!text || !String(text).trim()) fail(c.ctx, t('Réponse vide du fournisseur.'), 'empty');
+      this.#set('ok', `${t(p.label)} · ${c.ctx.model} : OK`);
       return text;
     } catch (e) {
       this.#set(e.name === 'AbortError' ? 'idle' : 'error', e.name === 'AbortError' ? '' : e.message);
@@ -419,7 +563,7 @@ const llm = new LLMClient();
 function parseJson(text) {
   const t = text.replace(/```(?:json)?/gi, '');
   const i = t.search(/[\[{]/);
-  if (i < 0) throw new Error('Aucun JSON dans la réponse');
+  if (i < 0) throw new Error(t('Aucun JSON dans la réponse'));
   const close = t[i] === '[' ? ']' : '}';
   const j = t.lastIndexOf(close);
   return JSON.parse(t.slice(i, j + 1));
@@ -438,38 +582,39 @@ const { state, save, exportJson, importProject, projectForExport, loadDemo, list
 const { PROVIDERS, llm } = __m.llm;
 const { getKey, setKey, clearKeys, isRemembered, mask, isAuthorized, setAuthorized } = __m.keys;
 const { esc, $, showProject } = __m.ui;
+const { t, locale } = __m.i18n;
 function render(root) {
   const s = state.settings;
   root.innerHTML = `
-  <h2>Projets</h2>
+  <h2>${t('Projets')}</h2>
   <div class="row">
-    <div><label for="pname">Nom du projet courant</label><input id="pname"></div>
-    <div><label for="plist">Ouvrir un projet</label><select id="plist">${listProjects().map(p => `<option value="${p.pid}" ${p.pid === state.pid ? 'selected' : ''}>${esc(p.name)} (${new Date(p.updated).toLocaleDateString('fr-FR')})</option>`).join('')}</select></div>
+    <div><label for="pname">${t('Nom du projet courant')}</label><input id="pname"></div>
+    <div><label for="plist">${t('Ouvrir un projet')}</label><select id="plist">${listProjects().map(p => `<option value="${p.pid}" ${p.pid === state.pid ? 'selected' : ''}>${esc(p.name)} (${new Date(p.updated).toLocaleDateString(locale)})</option>`).join('')}</select></div>
   </div>
-  <div class="bar"><button id="pnew">Nouveau projet</button><button id="pdel">Supprimer le projet courant</button><button id="reset">Vider le projet courant</button>
-    <button id="exp">Exporter le projet (JSON)</button><label style="margin:0">Importer comme nouveau projet <input id="imp" type="file" accept=".json" style="width:auto"></label></div>
-  <div class="bar"><button id="demo" class="pri">Ouvrir la démo complète (sans LLM)</button><span class="mut">Nouveau projet avec scénarios et règles d'exemple déjà mappés : prêt pour la matrice en un clic.</span></div>
-  <p class="mut">Les projets sont enregistrés dans ce navigateur ; exporter en JSON pour les sauvegarder ou les partager (les clés API ne sont jamais exportées).</p>
-  <h2>Utilisation de l'IA</h2>
+  <div class="bar"><button id="pnew">${t('Nouveau projet')}</button><button id="pdel">${t('Supprimer le projet courant')}</button><button id="reset">${t('Vider le projet courant')}</button>
+    <button id="exp">${t('Exporter le projet (JSON)')}</button><label style="margin:0">${t('Importer comme nouveau projet')} <input id="imp" type="file" accept=".json" style="width:auto"></label></div>
+  <div class="bar"><button id="demo" class="pri">${t('Ouvrir la démo complète (sans LLM)')}</button><span class="mut">${t('Nouveau projet avec scénarios et règles d’exemple déjà mappés : prêt pour la matrice en un clic.')}</span></div>
+  <p class="mut">${t('Les projets sont enregistrés dans ce navigateur ; exporter en JSON pour les sauvegarder ou les partager (les clés API ne sont jamais exportées).')}</p>
+  <h2>${t('Utilisation de l’IA')}</h2>
   <label class="chk"><input type="checkbox" id="auth"> I confirm that AI use is authorized for this content and complies with the client's rules.</label>
-  <p class="mut">Je confirme que l'usage de l'IA est autorisé pour ce contenu et conforme aux règles du client. Aucun appel IA (génération, mapping, liste des modèles, test) n'est envoyé tant que cette case n'est pas cochée ; elle est à reconfirmer à chaque session.</p>
-  <h2>Endpoint LLM</h2>
+  <p class="mut">${t('Je confirme que l’usage de l’IA est autorisé pour ce contenu et conforme aux règles du client. Aucun appel IA (génération, mapping, liste des modèles, test) n’est envoyé tant que cette case n’est pas cochée ; elle est à reconfirmer à chaque session.')}</p>
+  <h2>${t('Endpoint LLM')}</h2>
   <div class="row">
-    <div><label for="prov">Fournisseur</label><select id="prov">${Object.entries(PROVIDERS).map(([k, p]) => `<option value="${k}">${esc(p.label)}</option>`).join('')}</select></div>
-    <div><label for="base" id="base-l">URL de base</label><input id="base"></div>
-    <div><label for="key" id="key-l">Clé API</label><input id="key" type="password" autocomplete="off"></div>
-    <div data-hide="azure"><label for="model">Modèle</label><input id="model" list="models"><datalist id="models"></datalist></div>
-    <div data-show="azure"><label for="dep">Déploiement</label><input id="dep"></div>
-    <div data-show="azure"><label for="apiv">Version d'API</label><input id="apiv"></div>
-    <div><label for="temp">Température</label><input id="temp" type="number" step="0.1" min="0" max="2"></div>
-    <div><label for="batch">Règles par lot</label><input id="batch" type="number" min="1" max="50"></div>
+    <div><label for="prov">${t('Fournisseur')}</label><select id="prov">${Object.entries(PROVIDERS).map(([k, p]) => `<option value="${k}">${esc(t(p.label))}</option>`).join('')}</select></div>
+    <div><label for="base" id="base-l"></label><input id="base"></div>
+    <div><label for="key" id="key-l"></label><input id="key" type="password" autocomplete="off"></div>
+    <div data-hide="azure"><label for="model">${t('Modèle')}</label><input id="model" list="models"><datalist id="models"></datalist></div>
+    <div data-show="azure"><label for="dep">${t('Déploiement')}</label><input id="dep"></div>
+    <div data-show="azure"><label for="apiv">${t('Version d’API')}</label><input id="apiv"></div>
+    <div><label for="temp">${t('Température')}</label><input id="temp" type="number" step="0.1" min="0" max="2"></div>
+    <div><label for="batch">${t('Règles par lot')}</label><input id="batch" type="number" min="1" max="50"></div>
   </div>
-  <label class="chk"><input type="checkbox" id="rem"> Mémoriser cette clé sur ce navigateur</label>
-  <p class="mut">Par défaut la clé reste en mémoire de session (effacée à la fermeture de l'onglet) et n'est jamais exportée ni enregistrée avec le projet. Elle n'est envoyée qu'à l'URL ci-dessus (HTTPS exigé, sauf en local). Le serveur doit autoriser CORS pour <code>${esc(location.origin)}</code> (Ollama : variable <code>OLLAMA_ORIGINS</code>).</p>
-  <div class="bar"><button id="models-btn">Lister les modèles</button><button id="test" class="pri">Tester la connexion</button><button id="clear">Effacer les clés API</button><span id="pill" class="pill"></span></div>
+  <label class="chk"><input type="checkbox" id="rem"> ${t('Mémoriser cette clé sur ce navigateur')}</label>
+  <p class="mut">${t('Par défaut la clé reste en mémoire de session (effacée à la fermeture de l’onglet) et n’est jamais exportée ni enregistrée avec le projet. Elle n’est envoyée qu’à l’URL ci-dessus (HTTPS exigé, sauf en local). Le serveur doit autoriser CORS pour {origin} (Ollama : variable {var}).', { origin: `<code>${esc(location.origin)}</code>`, var: '<code>OLLAMA_ORIGINS</code>' })}</p>
+  <div class="bar"><button id="models-btn">${t('Lister les modèles')}</button><button id="test" class="pri">${t('Tester la connexion')}</button><button id="clear">${t('Effacer les clés API')}</button><span id="pill" class="pill"></span></div>
   <p id="st" class="mut"></p>
-  <h2>Stratégie de détection</h2>
-  <label for="stages">Étapes (une par ligne)</label><textarea id="stages" style="min-height:5rem"></textarea>
+  <h2>${t('Stratégie de détection')}</h2>
+  <label for="stages">${t('Étapes (une par ligne)')}</label><textarea id="stages" style="min-height:5rem"></textarea>
 `;
 
   const f = { base: 'base', model: 'model', dep: 'deployment', apiv: 'apiVersion', temp: 'temperature', batch: 'batch' };
@@ -477,16 +622,16 @@ function render(root) {
   const showStatus = () => {
     const { state: k } = llm.status;
     pill.className = 'pill ' + k;
-    pill.textContent = { idle: 'Non testé', busy: 'En cours…', ok: 'OK', warn: 'Liste de secours', error: 'Erreur' }[k];
+    pill.textContent = { idle: t('Non testé'), busy: t('En cours…'), ok: 'OK', warn: t('Liste de secours'), error: t('Erreur') }[k];
   };
   const applyProvider = () => {
     const p = PROVIDERS[s.provider], az = p.kind === 'azure';
     root.querySelectorAll('[data-show]').forEach(e => e.hidden = !az);
     root.querySelectorAll('[data-hide]').forEach(e => e.hidden = az);
-    $(root, '#base-l').textContent = az ? 'Endpoint HTTPS Azure (https://<ressource>.openai.azure.com)' : 'URL de base';
-    $(root, '#key-l').textContent = `Clé API (${p.keyRequired ? 'requise' : 'optionnelle'})`;
+    $(root, '#base-l').textContent = az ? t('Endpoint HTTPS Azure (https://<ressource>.openai.azure.com)') : t('URL de base');
+    $(root, '#key-l').textContent = p.keyRequired ? t('Clé API (requise)') : t('Clé API (optionnelle)');
     const k = getKey(s.provider);
-    $(root, '#key').value = ''; $(root, '#key').placeholder = k ? `Clé enregistrée ${mask(k)}` : '';
+    $(root, '#key').value = ''; $(root, '#key').placeholder = k ? t('Clé enregistrée {mask}', { mask: mask(k) }) : '';
     $(root, '#rem').checked = isRemembered(s.provider);
   };
   const fill = () => { for (const [id, k] of Object.entries(f)) $(root, '#' + id).value = s[k]; $(root, '#stages').value = s.stages.join('\n'); $(root, '#prov').value = s.provider; applyProvider(); };
@@ -494,7 +639,7 @@ function render(root) {
     try {
       const r = await llm.getAvailableModels();
       $(root, '#models').innerHTML = r.models.map(m => `<option value="${esc(m)}">`).join('');
-      st.textContent = r.fallback ? `Liste de secours (chargement impossible : ${r.reason})` : `${r.models.length} modèles chargés (voir le champ Modèle).`;
+      st.textContent = r.fallback ? t('Liste de secours (chargement impossible : {r})', { r: r.reason }) : t('{n} modèles chargés (voir le champ Modèle).', { n: r.models.length });
     } catch (e) { st.textContent = e.message; }
     showStatus();
   };
@@ -514,28 +659,28 @@ function render(root) {
     if (isAuthorized()) loadModels();
   };
   $(root, '#rem').onchange = e => { const k = getKey(s.provider); if (k) setKey(s.provider, k, e.target.checked); };
-  $(root, '#clear').onclick = () => { if (confirm('Effacer toutes les clés API de ce navigateur (session et mémorisées) ?')) { clearKeys(); applyProvider(); st.textContent = 'Clés API effacées.'; } };
+  $(root, '#clear').onclick = () => { if (confirm(t('Effacer toutes les clés API de ce navigateur (session et mémorisées) ?'))) { clearKeys(); applyProvider(); st.textContent = t('Clés API effacées.'); } };
   $(root, '#stages').onchange = e => { s.stages = e.target.value.split('\n').map(x => x.trim()).filter(Boolean); save(); };
   $(root, '#models-btn').onclick = loadModels;
   $(root, '#test').onclick = async () => {
-    st.textContent = ''; pill.className = 'pill busy'; pill.textContent = 'En cours…';
-    try { st.textContent = 'Connexion OK : ' + await llm.testConnection(); } catch (e) { st.textContent = e.message; }
+    st.textContent = ''; pill.className = 'pill busy'; pill.textContent = t('En cours…');
+    try { st.textContent = t('Connexion OK : {r}', { r: await llm.testConnection() }); } catch (e) { st.textContent = e.message; }
     showStatus();
   };
   const reload = () => { showProject(); render(root); };
   $(root, '#pname').value = state.name;
-  $(root, '#pname').onchange = e => { state.name = e.target.value.trim() || 'Projet sans nom'; save(); reload(); };
+  $(root, '#pname').onchange = e => { state.name = e.target.value.trim() || t('Projet sans nom'); save(); reload(); };
   $(root, '#plist').onchange = e => { try { openProject(e.target.value); } catch (x) { alert(x.message); } reload(); };
-  $(root, '#pnew').onclick = () => { const n = prompt('Nom du nouveau projet', 'Nouveau projet'); if (n !== null) { newProject(n.trim()); reload(); } };
-  $(root, '#pdel').onclick = () => { if (confirm(`Supprimer définitivement le projet « ${state.name} » de ce navigateur ?`)) { deleteProject(state.pid); reload(); } };
+  $(root, '#pnew').onclick = () => { const n = prompt(t('Nom du nouveau projet'), t('Nouveau projet')); if (n !== null) { newProject(n.trim()); reload(); } };
+  $(root, '#pdel').onclick = () => { if (confirm(t('Supprimer définitivement le projet « {name} » de ce navigateur ?', { name: state.name }))) { deleteProject(state.pid); reload(); } };
   const slug = state.name.normalize('NFD').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'projet';
   $(root, '#exp').onclick = () => exportJson(`mitremapper-${slug}.json`, projectForExport());
   $(root, '#imp').onchange = async e => {
-    const f = e.target.files[0];
-    try { importProject(await f.text(), f.name.replace(/\.json$/i, '')); reload(); } catch (x) { alert(x.message); }
+    const file = e.target.files[0];
+    try { importProject(await file.text(), file.name.replace(/\.json$/i, '')); reload(); } catch (x) { alert(x.message); }
   };
   $(root, '#demo').onclick = async () => { try { await loadDemo(); reload(); } catch (x) { alert(x.message); } };
-  $(root, '#reset').onclick = () => { if (confirm(`Vider le projet « ${state.name} » (scénarios, règles, CTI) ?`)) { state.scenarios = []; state.rules = []; state.cti = ''; save(); } };
+  $(root, '#reset').onclick = () => { if (confirm(t('Vider le projet « {name} » (scénarios, règles, CTI) ?', { name: state.name }))) { state.scenarios = []; state.rules = []; state.cti = ''; save(); } };
 }
 
 return { render };
@@ -545,24 +690,25 @@ const { state, save, uid, sample, sref } = __m.store;
 const { chatJson } = __m.llm;
 const { validate, promptCatalog } = __m.attack;
 const { esc, $, readFiles, run, gateAI } = __m.ui;
-const SYSTEM = `Tu es un analyste CTI senior. À partir du profil client et des extraits de rapports de menace, tu déduis les scénarios de menace les plus pertinents à couvrir en détection.
+const { t, lang } = __m.i18n;
+const SYSTEM = () => `Tu es un analyste CTI senior. À partir du profil client et des extraits de rapports de menace, tu déduis les scénarios de menace les plus pertinents à couvrir en détection.
 Réponds en JSON : {"scenarios":[{"name":"","actors":"","summary":"","techniques":["T1566.001"],"priority":"high|medium|low","rationale":""}]}
-Règles : rédige tout en français ; 5 à 15 scénarios, concrets et distincts ; techniques = IDs ATT&CK Enterprise existants (techniques ou sous-techniques), 4 à 12 par scénario, ordonnées selon la kill chain ; priority selon la probabilité et l'impact pour CE client ; répartis les priorités (au plus la moitié en high) ; préfère les sous-techniques précises quand la source les justifie.
+Règles : ${lang === 'en' ? 'rédige tous les textes (name, actors, summary, rationale) EN ANGLAIS' : 'rédige tout en français'} ; 5 à 15 scénarios, concrets et distincts ; techniques = IDs ATT&CK Enterprise existants (techniques ou sous-techniques), 4 à 12 par scénario, ordonnées selon la kill chain ; priority selon la probabilité et l'impact pour CE client ; répartis les priorités (au plus la moitié en high) ; préfère les sous-techniques précises quand la source les justifie.
 Techniques parentes de référence :\n`;
 
 function render(root) {
   const c = state.client;
   root.innerHTML = `
-  <h2>Profil client</h2>
+  <h2>${t('Profil client')}</h2>
   <div class="row">
-    <div><label>Secteur</label><input id="sector"></div><div><label>Taille</label><input id="size"></div>
-    <div><label>Pays / zones</label><input id="country"></div><div><label>Actifs / contraintes clés</label><input id="assets"></div>
+    <div><label>${t('Secteur')}</label><input id="sector"></div><div><label>${t('Taille')}</label><input id="size"></div>
+    <div><label>${t('Pays / zones')}</label><input id="country"></div><div><label>${t('Actifs / contraintes clés')}</label><input id="assets"></div>
   </div>
-  <h2>Sources CTI (rapports, tendances)</h2>
-  <textarea id="cti" placeholder="Coller le texte des rapports de menace…"></textarea>
-  <div class="bar"><label style="margin:0">Ajouter des fichiers texte <input id="files" type="file" multiple accept=".txt,.md,.json,.csv,.html" style="width:auto"></label>
-    <button id="demo">Charger l'exemple</button><button id="gen" class="pri">Générer les scénarios</button><label style="margin:0"><input id="repl" type="checkbox" style="width:auto"> remplacer l'existant</label><span id="st"></span></div>
-  <h2>Scénarios (<span id="n"></span>)</h2><div id="list"></div><button id="add">+ Scénario manuel</button>`;
+  <h2>${t('Sources CTI (rapports, tendances)')}</h2>
+  <textarea id="cti" placeholder="${t('Coller le texte des rapports de menace…')}"></textarea>
+  <div class="bar"><label style="margin:0">${t('Ajouter des fichiers texte')} <input id="files" type="file" multiple accept=".txt,.md,.json,.csv,.html" style="width:auto"></label>
+    <button id="demo">${t('Charger l’exemple')}</button><button id="gen" class="pri">${t('Générer les scénarios')}</button><label style="margin:0"><input id="repl" type="checkbox" style="width:auto"> ${t('remplacer l’existant')}</label><span id="st"></span></div>
+  <h2>${t('Scénarios')} (<span id="n"></span>)</h2><div id="list"></div><button id="add">${t('+ Scénario manuel')}</button>`;
   gateAI(root, ['#gen'], '#st');
   for (const k of Object.keys(c)) { const el = $(root, '#' + k); el.value = c[k]; el.onchange = () => { c[k] = el.value; save(); }; }
   const cti = $(root, '#cti'); cti.value = state.cti; cti.onchange = () => { state.cti = cti.value; save(); };
@@ -572,19 +718,19 @@ function render(root) {
   };
 
   $(root, '#demo').onclick = async () => {
-    Object.assign(c, { sector: 'Santé (hôpitaux)', size: 'ETI, 3 000 employés', country: 'France / Europe', assets: 'SI hospitalier, serveurs ESXi, dossiers patients' });
+    Object.assign(c, { sector: t('Santé (hôpitaux)'), size: t('ETI, 3 000 employés'), country: t('France / Europe'), assets: t('SI hospitalier, serveurs ESXi, dossiers patients') });
     state.cti = await sample('cti.txt'); save(); render(root);
   };
   const list = $(root, '#list');
   const draw = () => {
     $(root, '#n').textContent = state.scenarios.length;
     list.innerHTML = state.scenarios.map(s => `<div class="card" data-id="${s.id}"><b class="tag sref">${sref(s)}</b>
-      <div class="row"><div><label>Nom</label><input data-k="name" value="${esc(s.name)}"></div>
-      <div><label>Priorité</label><select data-k="priority">${['high', 'medium', 'low'].map(p => `<option ${p === s.priority ? 'selected' : ''}>${p}</option>`).join('')}</select></div>
-      <div><label>Techniques (IDs, séparés par des virgules)</label><input data-k="techniques" value="${esc(s.techniques.join(', '))}"></div></div>
-      <label>Résumé / justification</label><input data-k="summary" value="${esc(s.summary || '')}">
-      <div class="mut">${esc(s.actors || '')} ${s.rejected?.length ? `<span class="err">IDs rejetés : ${esc(s.rejected.join(', '))}</span>` : ''}</div>
-      <button data-del>Supprimer</button></div>`).join('');
+      <div class="row"><div><label>${t('Nom')}</label><input data-k="name" value="${esc(s.name)}"></div>
+      <div><label>${t('Priorité')}</label><select data-k="priority">${['high', 'medium', 'low'].map(p => `<option ${p === s.priority ? 'selected' : ''}>${p}</option>`).join('')}</select></div>
+      <div><label>${t('Techniques (IDs, séparés par des virgules)')}</label><input data-k="techniques" value="${esc(s.techniques.join(', '))}"></div></div>
+      <label>${t('Résumé / justification')}</label><input data-k="summary" value="${esc(s.summary || '')}">
+      <div class="mut">${esc(s.actors || '')} ${s.rejected?.length ? `<span class="err">${t('IDs rejetés : {ids}', { ids: esc(s.rejected.join(', ')) })}</span>` : ''}</div>
+      <button data-del>${t('Supprimer')}</button></div>`).join('');
   };
   list.onchange = e => {
     const k = e.target.dataset.k;
@@ -597,12 +743,12 @@ function render(root) {
     if (e.target.dataset.del === undefined) return;
     state.scenarios = state.scenarios.filter(x => x.id !== e.target.closest('.card').dataset.id); save(); draw();
   };
-  $(root, '#add').onclick = () => { state.scenarios.push({ id: uid(), name: 'Nouveau scénario', priority: 'medium', techniques: [] }); save(); draw(); };
+  $(root, '#add').onclick = () => { state.scenarios.push({ id: uid(), name: t('Nouveau scénario'), priority: 'medium', techniques: [] }); save(); draw(); };
   $(root, '#gen').onclick = () => run($(root, '#st'), async (signal, say) => {
-    if (!state.cti.trim()) throw new Error('Ajoute du contenu CTI.');
-    say('Appel LLM…');
+    if (!state.cti.trim()) throw new Error(t('Ajoute du contenu CTI.'));
+    say(t('Appel LLM…'));
     const user = `Profil client : ${JSON.stringify(c)}\n\nSources CTI :\n${state.cti.slice(0, 60000)}`;
-    const r = await chatJson({ system: SYSTEM + promptCatalog(), user, signal });
+    const r = await chatJson({ system: SYSTEM() + promptCatalog(), user, signal });
     const out = (r.scenarios || r).map(s => { const v = validate(s.techniques); return { ...s, id: uid(), techniques: v.ok, rejected: v.rejected }; });
     state.scenarios = $(root, '#repl').checked ? out : [...state.scenarios, ...out];
     save(); draw();
@@ -618,12 +764,14 @@ const { chatJson } = __m.llm;
 const { attack, tech, validate, parentOf, promptCatalog } = __m.attack;
 const { esc, $, readFiles, run } = __m.ui;
 const { isAuthorized } = __m.keys;
+const { t, lang } = __m.i18n;
 const SYSTEM = (stages, scenarios) => `Tu es un ingénieur detection engineering. Pour chaque règle de détection (Sigma, KQL, SPL, EDR, ou simple documentation), tu identifies les techniques ATT&CK Enterprise qu'elle détecte réellement (pas celles simplement liées au contexte).
 Réponds en JSON : {"results":[{"i":0,"techniques":["T1059.001"],"scenarios":[{"s":"S1","why":"une phrase"}],"stage":"","confidence":"high|medium|low","note":""}]}
 - i = index de la règle fourni en entrée ; techniques = IDs existants, préférer la sous-technique quand la logique la cible précisément.
 - stage = une valeur parmi : ${stages.join(' | ')}
 - scenarios = scénarios ci-dessous (S1, S2…) dont la règle détecte réellement une étape ; sois sélectif, [] si aucun. why = une phrase qui dit quelle étape du scénario la règle détecte.
 - confidence : high = détection directe et robuste ; medium = partielle/contournable ; low = indirecte ou très bruitée.
+- why et note : ${lang === 'en' ? 'rédigés EN ANGLAIS' : 'rédigés en français'}.
 Scénarios :\n${scenarios.map(s => `${sref(s)} ${s.name} [${s.techniques.join(',')}]`).join('\n') || '(aucun)'}
 Techniques parentes de référence :\n${promptCatalog()}`;
 
@@ -633,26 +781,26 @@ const tagsOf = r => (r.tags ??= extractTechniques(r.body));
 /** Divergence (au niveau technique parente) entre les tags déclarés et la lecture de l'IA ; null si aucun. */
 const tagDiff = (tags, ia) => {
   const P = a => new Set(a.map(parentOf)), pt = P(tags), pi = P(ia);
-  const d = { tags: tags.filter(t => !pi.has(parentOf(t))), ia: ia.filter(t => !pt.has(parentOf(t))) };
+  const d = { tags: tags.filter(x => !pi.has(parentOf(x))), ia: ia.filter(x => !pt.has(parentOf(x))) };
   return tags.length && (d.tags.length || d.ia.length) ? d : null;
 };
 /** Mapping déterministe depuis les tags : scénarios liés = ceux qui partagent une technique. */
 const fromTags = (r, tags, S) => {
   const links = S.map(s => [s, common({ techniques: tags }, s)]).filter(([, c]) => c.length);
   return { techniques: tags, rejected: [], scenarios: links.map(([s]) => s.id), mapped: true, reviewed: false, by: 'tags', tagDiff: null,
-    why: Object.fromEntries(links.map(([s, c]) => [s.id, `Lien automatique : technique commune ${c.join(', ')}.`])),
-    note: 'Techniques lues dans les tags de la règle (sans IA).' };
+    why: Object.fromEntries(links.map(([s, c]) => [s.id, t('Lien automatique : technique commune {ids}.', { ids: c.join(', ') })])),
+    note: t('Techniques lues dans les tags de la règle (sans IA).') };
 };
 
 /** Découpe un texte collé en règles (séparateur : ligne '---' ou '==='). */
-const splitRules = (name, text) => text.split(/^\s*(?:---|===)\s*$/m).map(t => t.trim()).filter(Boolean).map(body => ({
+const splitRules = (name, text) => text.split(/^\s*(?:---|===)\s*$/m).map(x => x.trim()).filter(Boolean).map(body => ({
   id: uid(), source: name, body, name: (body.match(/^title:\s*(.+)$/mi) || body.match(/^(.{1,80})/))[1].trim(),
   techniques: [], scenarios: [], stage: '', confidence: '', mapped: false,
 }));
 function fromJson(name, text) {
   try {
     const d = JSON.parse(text);
-    if (Array.isArray(d)) return d.map(o => ({ ...splitRules(name, JSON.stringify(o, null, 1))[0], name: String(o.name || o.title || o.rule_name || o.id || 'règle') }));
+    if (Array.isArray(d)) return d.map(o => ({ ...splitRules(name, JSON.stringify(o, null, 1))[0], name: String(o.name || o.title || o.rule_name || o.id || t('règle')) }));
   } catch {}
   return splitRules(name, text);
 }
@@ -660,7 +808,7 @@ function fromJson(name, text) {
 /** Techniques de la règle qui recoupent celles du scénario (comparaison au niveau technique parente). */
 const common = (r, s) => {
   const p = new Set(s.techniques.map(parentOf));
-  return [...new Set(r.techniques.filter(t => p.has(parentOf(t))))];
+  return [...new Set(r.techniques.filter(x => p.has(parentOf(x))))];
 };
 /** 'ok' lié et cohérent · 'suspect' lié sans technique commune · 'miss' non lié mais technique commune · '' sinon. */
 const linkState = (r, s) => {
@@ -671,51 +819,51 @@ const flags = r => {
   const st = state.scenarios.map(s => linkState(r, s)), n = r.scenarios.length;
   return { todo: !r.reviewed, suspect: st.includes('suspect'), miss: st.includes('miss'), none: !n, wide: n >= 4 && n > state.scenarios.length / 2, low: r.confidence === 'low', diff: !!r.tagDiff };
 };
-const FILTERS = { all: 'Toutes', todo: 'À relire', suspect: 'Suspects', miss: 'Oublis possibles', none: 'Sans scénario', wide: 'Trop larges', low: 'Confiance basse', diff: 'Divergence tags / IA' };
+const FILTERS = { all: t('Toutes'), todo: t('À relire'), suspect: t('Suspects'), miss: t('Oublis possibles'), none: t('Sans scénario'), wide: t('Trop larges'), low: t('Confiance basse'), diff: t('Divergence tags / IA') };
 const SYM = { ok: '●', suspect: '⚠', miss: '◌', '': '·' };
 const view = { q: '', f: 'all', hl: '', sel: null }; // état d'affichage conservé tant que la page est ouverte
 const scId = (ref, sc) => sc.find(s => s.ref === +String(ref).replace(/\D/g, ''))?.id;
 
 function render(root) {
   root.innerHTML = `
-  <details id="imp" ${state.rules.length ? '' : 'open'}><summary><b>Importer des règles</b></summary>
-    <textarea id="paste" placeholder="Coller des règles ou de la documentation. Séparer plusieurs règles par une ligne --- (YAML Sigma multi-documents OK)."></textarea>
-    <div class="bar"><button id="demo">Charger les règles d'exemple</button><button id="addp">Ajouter le texte collé</button>
-      <label style="margin:0">Ou fichiers <input id="files" type="file" multiple style="width:auto" accept=".yml,.yaml,.json,.txt,.md,.kql,.spl,.csv"></label>
-      <span class="mut">Un fichier = une ou plusieurs règles (séparateur ---) ; un .json contenant un tableau = une règle par élément.</span></div>
+  <details id="imp" ${state.rules.length ? '' : 'open'}><summary><b>${t('Importer des règles')}</b></summary>
+    <textarea id="paste" placeholder="${t('Coller des règles ou de la documentation. Séparer plusieurs règles par une ligne --- (YAML Sigma multi-documents OK).')}"></textarea>
+    <div class="bar"><button id="demo">${t('Charger les règles d’exemple')}</button><button id="addp">${t('Ajouter le texte collé')}</button>
+      <label style="margin:0">${t('Ou fichiers')} <input id="files" type="file" multiple style="width:auto" accept=".yml,.yaml,.json,.txt,.md,.kql,.spl,.csv"></label>
+      <span class="mut">${t('Un fichier = une ou plusieurs règles (séparateur ---) ; un .json contenant un tableau = une règle par élément.')}</span></div>
   </details>
-  <div class="bar"><button id="map" class="pri">Mapper les règles non traitées</button><button id="remap">Tout remapper</button><span id="st"></span></div>
-  <label class="chk"><input type="checkbox" id="verify"> Faire aussi relire par l'IA les règles qui ont des tags ATT&amp;CK (détecte les écarts entre tags déclarés et logique de la règle)</label>
-  <p class="mut" style="margin-top:0">Les règles qui déclarent leurs techniques (tags Sigma <code>attack.t…</code>, champs MITRE des exports SIEM/EDR) sont mappées sans IA ; l'IA ne traite que les autres.</p>
-  <h2>Revue du mapping (<span id="n"></span>)</h2>
-  <div class="mtools"><input id="q" type="search" placeholder="Chercher règle ou technique" aria-label="Chercher"><span id="flt"></span><span id="prog" class="mut"></span></div>
-  <p class="mut" style="margin:.2rem 0 .6rem"><b>●</b> lié, techniques en commun · <b class="err">⚠</b> lié sans technique commune (à challenger) · <b style="color:var(--amber)">◌</b> non lié mais technique en commun (oubli possible) · clic sur une cellule = lier / délier · clic sur une ligne = détail</p>
+  <div class="bar"><button id="map" class="pri">${t('Mapper les règles non traitées')}</button><button id="remap">${t('Tout remapper')}</button><span id="st"></span></div>
+  <label class="chk"><input type="checkbox" id="verify"> ${t('Faire aussi relire par l’IA les règles qui ont des tags ATT&amp;CK (détecte les divergences entre tags déclarés et logique de la règle)')}</label>
+  <p class="mut" style="margin-top:0">${t('Les règles qui déclarent leurs techniques (tags Sigma <code>attack.t…</code>, champs MITRE des exports SIEM/EDR) sont mappées sans IA ; l’IA ne traite que les autres.')}</p>
+  <h2>${t('Revue du mapping')} (<span id="n"></span>)</h2>
+  <div class="mtools"><input id="q" type="search" placeholder="${t('Chercher règle ou technique')}" aria-label="${t('Chercher')}"><span id="flt"></span><span id="prog" class="mut"></span></div>
+  <p class="mut" style="margin:.2rem 0 .6rem">${t('<b>●</b> lié, techniques en commun · <b class="err">⚠</b> lié sans technique commune (à challenger) · <b style="color:var(--amber)">◌</b> non lié mais technique en commun (oubli possible) · clic sur une cellule = lier / délier · clic sur une ligne = détail')}</p>
   <div class="mwrap"><table class="rm"><thead id="head"></thead><tbody id="rows"></tbody><tfoot id="foot"></tfoot></table></div>
-  <aside id="detail" aria-live="polite"></aside><datalist id="techlist">${attack.techniques.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</datalist>`;
+  <aside id="detail" aria-live="polite"></aside><datalist id="techlist">${attack.techniques.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</datalist>`;
 
-  if (!isAuthorized()) $(root, '#st').innerHTML = '<span class="mut">IA non autorisée : seules les règles avec tags ATT&amp;CK seront mappées (autorisation dans Paramètres).</span>';
+  if (!isAuthorized()) $(root, '#st').innerHTML = `<span class="mut">${t('IA non autorisée : seules les règles avec tags ATT&amp;CK seront mappées (autorisation dans Paramètres).')}</span>`;
   const sc = () => state.scenarios, rule = id => state.rules.find(r => r.id === id);
-  const chips = (ids, rm) => ids.map(t => `<span class="tag" title="${esc(tech(t)?.name || '')}">${t}${rm ? `<button class="rmt" data-rmt="${t}" aria-label="Retirer ${t}">×</button>` : ''}</span>`).join('');
+  const chips = (ids, rm) => ids.map(id => `<span class="tag" title="${esc(tech(id)?.name || '')}">${id}${rm ? `<button class="rmt" data-rmt="${id}" aria-label="${t('Retirer {id}', { id })}">×</button>` : ''}</span>`).join('');
 
   function draw() {
     const q = view.q.trim().toLowerCase(), S = sc();
     $(root, '#n').textContent = state.rules.length;
-    $(root, '#prog').textContent = `${state.rules.filter(r => r.reviewed).length}/${state.rules.length} validées`;
+    $(root, '#prog').textContent = t('{n}/{m} validées', { n: state.rules.filter(r => r.reviewed).length, m: state.rules.length });
     $(root, '#flt').innerHTML = Object.entries(FILTERS).map(([f, l]) => `<button class="lg flt ${view.f === f ? 'on' : ''}" data-f="${f}">${l} ${f === 'all' ? state.rules.length : state.rules.filter(r => flags(r)[f]).length}</button>`).join('');
-    $(root, '#head').innerHTML = `<tr><th></th><th>Règle</th><th>Techniques</th>${S.map(s => `<th class="sc ${view.hl === s.id ? 'hl' : ''}" data-hl="${s.id}" title="${esc(s.name)} (${esc(s.priority)}) : trier par ce scénario"><span class="tag sref">${sref(s)}</span></th>`).join('')}</tr>`;
+    $(root, '#head').innerHTML = `<tr><th></th><th>${t('Règle')}</th><th>${t('Techniques')}</th>${S.map(s => `<th class="sc ${view.hl === s.id ? 'hl' : ''}" data-hl="${s.id}" title="${t('{name} ({prio}) : trier par ce scénario', { name: esc(s.name), prio: esc(s.priority) })}"><span class="tag sref">${sref(s)}</span></th>`).join('')}</tr>`;
     const list = state.rules.filter(r => (view.f === 'all' || flags(r)[view.f])
-      && (!q || (r.name + ' ' + r.source + ' ' + r.techniques.map(t => t + ' ' + (tech(t)?.name || '')).join(' ')).toLowerCase().includes(q)));
+      && (!q || (r.name + ' ' + r.source + ' ' + r.techniques.map(x => x + ' ' + (tech(x)?.name || '')).join(' ')).toLowerCase().includes(q)));
     if (view.hl) list.sort((a, b) => b.scenarios.includes(view.hl) - a.scenarios.includes(view.hl));
     $(root, '#rows').innerHTML = list.map(r => `<tr data-id="${r.id}" class="${view.sel === r.id ? 'sel' : ''}">
-      <td><input type="checkbox" data-rev ${r.reviewed ? 'checked' : ''} aria-label="Règle validée"></td>
-      <td><b>${esc(r.name)}</b><div class="mut">${esc(r.source)}${r.confidence ? ' · ' + esc(r.confidence) : ''}${r.stage ? ' · ' + esc(r.stage) : ''}${r.by ? ' · via ' + (r.by === 'tags' ? 'tags' : 'IA') : ''}</div></td>
-      <td>${chips(r.techniques)}${r.rejected?.length ? `<div class="err">rejetés : ${esc(r.rejected.join(', '))}</div>` : ''}</td>
+      <td><input type="checkbox" data-rev ${r.reviewed ? 'checked' : ''} aria-label="${t('Règle validée')}"></td>
+      <td><b>${esc(r.name)}</b><div class="mut">${esc(r.source)}${r.confidence ? ' · ' + esc(r.confidence) : ''}${r.stage ? ' · ' + esc(r.stage) : ''}${r.by ? ' · ' + (r.by === 'tags' ? t('via tags') : t('via IA')) : ''}</div></td>
+      <td>${chips(r.techniques)}${r.rejected?.length ? `<div class="err">${t('rejetés : {ids}', { ids: esc(r.rejected.join(', ')) })}</div>` : ''}</td>
       ${S.map(s => { const k = linkState(r, s); return `<td class="lk ${k} ${view.hl === s.id ? 'hl' : ''}"><button data-s="${s.id}" aria-pressed="${r.scenarios.includes(s.id)}" title="${esc(s.name)}">${SYM[k] || (r.scenarios.includes(s.id) ? '●' : '·')}</button></td>`; }).join('')}</tr>`).join('')
-      || `<tr><td colspan="${3 + S.length}" class="mut">${state.rules.length ? 'Aucune règle ne correspond à ces filtres.' : 'Aucune règle : importe-en ci-dessus.'}</td></tr>`;
+      || `<tr><td colspan="${3 + S.length}" class="mut">${state.rules.length ? t('Aucune règle ne correspond à ces filtres.') : t('Aucune règle : importe-en ci-dessus.')}</td></tr>`;
     const linked = s => state.rules.filter(r => r.scenarios.includes(s.id));
-    const open = s => { const ls = linked(s); return s.techniques.filter(t => !ls.some(r => r.techniques.some(x => parentOf(x) === parentOf(t)))).length; };
-    $(root, '#foot').innerHTML = S.length ? `<tr><td colspan="3">Règles liées</td>${S.map(s => `<td class="${linked(s).length ? '' : 'zero'}">${linked(s).length}</td>`).join('')}</tr>
-      <tr><td colspan="3">Techniques sans règle liée</td>${S.map(s => `<td title="${open(s)} sur ${s.techniques.length}">${open(s)}/${s.techniques.length}</td>`).join('')}</tr>` : '';
+    const open = s => { const ls = linked(s); return s.techniques.filter(x => !ls.some(r => r.techniques.some(y => parentOf(y) === parentOf(x)))).length; };
+    $(root, '#foot').innerHTML = S.length ? `<tr><td colspan="3">${t('Règles liées')}</td>${S.map(s => `<td class="${linked(s).length ? '' : 'zero'}">${linked(s).length}</td>`).join('')}</tr>
+      <tr><td colspan="3">${t('Techniques sans règle liée')}</td>${S.map(s => `<td title="${t('{n} sur {m}', { n: open(s), m: s.techniques.length })}">${open(s)}/${s.techniques.length}</td>`).join('')}</tr>` : '';
     if ($(root, '#detail').classList.contains('open')) detail();
   }
 
@@ -724,22 +872,22 @@ function render(root) {
     if (!r) { d.classList.remove('open'); return; }
     const S = sc();
     const lnk = S.filter(s => r.scenarios.includes(s.id)), miss = S.filter(s => linkState(r, s) === 'miss');
-    d.innerHTML = `<button class="x" aria-label="Fermer">×</button><h3>${esc(r.name)}</h3>
-      <p class="mut">${esc(r.source)} · <label style="display:inline;margin:0"><input type="checkbox" data-d="rev" ${r.reviewed ? 'checked' : ''} style="width:auto"> Validée</label></p>
-      <h4>Règle</h4><pre>${esc(r.body)}</pre>
-      ${r.note ? `<h4>Note du LLM</h4><p>${esc(r.note)}</p>` : ''}
-      <h4>Scénarios liés (${lnk.length})</h4>${lnk.map(s => `<div class="item"><span class="tag sref">${sref(s)}</span> <b>${esc(s.name)}</b> <span class="tag">${esc(s.priority)}</span>
-        ${linkState(r, s) === 'suspect' ? '<span class="tag gap">⚠ aucune technique commune</span>' : ''}
-        <div class="mut">${esc(r.why?.[s.id] || 'Pas de justification (remapper pour en obtenir une).')}</div>
-        <div>${chips(common(r, s))}</div><button data-unlink="${s.id}">Délier</button></div>`).join('') || '<p class="mut">Aucun scénario lié.</p>'}
-      <h4>Oublis possibles (${miss.length})</h4>${miss.map(s => `<div class="item"><span class="tag sref">${sref(s)}</span> ${esc(s.name)}<div>${chips(common(r, s))}</div><button data-link="${s.id}">Lier</button></div>`).join('') || '<p class="mut">Aucun.</p>'}
-      <h4>Techniques</h4><div>${chips(r.techniques, true) || '<span class="mut">Aucune.</span>'}</div>
-      ${tagsOf(r).length ? `<p class="mut">Tags déclarés dans la règle : ${chips(tagsOf(r))}</p>` : ''}
-      ${r.tagDiff ? `<div class="item"><span class="tag gap">Divergence tags / IA</span> ${r.tagDiff.tags.length ? `tags seuls : ${chips(r.tagDiff.tags)}` : ''} ${r.tagDiff.ia.length ? `IA seule : ${chips(r.tagDiff.ia)}` : ''}<div><button data-usetags>Utiliser les tags</button></div></div>` : ''}
-      <div class="bar"><input id="addt" list="techlist" placeholder="T1059.001" style="width:9rem"><button data-addt>Ajouter</button></div>${r.rejected?.length ? `<p class="err">ID inconnu : ${esc(r.rejected.join(', '))}</p>` : ''}
-      <h4>Qualification</h4><div class="row"><div><label>Confiance</label><select data-d="confidence">${['', 'high', 'medium', 'low'].map(x => `<option ${x === r.confidence ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
-        <div><label>Étape</label><select data-d="stage"><option></option>${state.settings.stages.map(x => `<option ${x === r.stage ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div></div>
-      <div class="bar"><button data-d="del">Supprimer la règle</button></div>`;
+    d.innerHTML = `<button class="x" aria-label="${t('Fermer')}">×</button><h3>${esc(r.name)}</h3>
+      <p class="mut">${esc(r.source)} · <label style="display:inline;margin:0"><input type="checkbox" data-d="rev" ${r.reviewed ? 'checked' : ''} style="width:auto"> ${t('Validée')}</label></p>
+      <h4>${t('Règle')}</h4><pre>${esc(r.body)}</pre>
+      ${r.note ? `<h4>${t('Note du LLM')}</h4><p>${esc(r.note)}</p>` : ''}
+      <h4>${t('Scénarios liés')} (${lnk.length})</h4>${lnk.map(s => `<div class="item"><span class="tag sref">${sref(s)}</span> <b>${esc(s.name)}</b> <span class="tag">${esc(s.priority)}</span>
+        ${linkState(r, s) === 'suspect' ? `<span class="tag gap">${t('⚠ aucune technique commune')}</span>` : ''}
+        <div class="mut">${esc(r.why?.[s.id] || t('Pas de justification (remapper pour en obtenir une).'))}</div>
+        <div>${chips(common(r, s))}</div><button data-unlink="${s.id}">${t('Délier')}</button></div>`).join('') || `<p class="mut">${t('Aucun scénario lié.')}</p>`}
+      <h4>${t('Oublis possibles')} (${miss.length})</h4>${miss.map(s => `<div class="item"><span class="tag sref">${sref(s)}</span> ${esc(s.name)}<div>${chips(common(r, s))}</div><button data-link="${s.id}">${t('Lier')}</button></div>`).join('') || `<p class="mut">${t('Aucun.')}</p>`}
+      <h4>${t('Techniques')}</h4><div>${chips(r.techniques, true) || `<span class="mut">${t('Aucune.')}</span>`}</div>
+      ${tagsOf(r).length ? `<p class="mut">${t('Tags déclarés dans la règle :')} ${chips(tagsOf(r))}</p>` : ''}
+      ${r.tagDiff ? `<div class="item"><span class="tag gap">${t('Divergence tags / IA')}</span> ${r.tagDiff.tags.length ? `${t('tags seuls :')} ${chips(r.tagDiff.tags)}` : ''} ${r.tagDiff.ia.length ? `${t('IA seule :')} ${chips(r.tagDiff.ia)}` : ''}<div><button data-usetags>${t('Utiliser les tags')}</button></div></div>` : ''}
+      <div class="bar"><input id="addt" list="techlist" placeholder="T1059.001" style="width:9rem"><button data-addt>${t('Ajouter')}</button></div>${r.rejected?.length ? `<p class="err">${t('ID inconnu : {ids}', { ids: esc(r.rejected.join(', ')) })}</p>` : ''}
+      <h4>${t('Qualification')}</h4><div class="row"><div><label>${t('Confiance')}</label><select data-d="confidence">${['', 'high', 'medium', 'low'].map(x => `<option ${x === r.confidence ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
+        <div><label>${t('Étape')}</label><select data-d="stage"><option></option>${state.settings.stages.map(x => `<option ${x === r.stage ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div></div>
+      <div class="bar"><button data-d="del">${t('Supprimer la règle')}</button></div>`;
     d.classList.add('open');
   }
   const link = (r, sid, on) => { r.scenarios = on ? [...new Set([...r.scenarios, sid])] : r.scenarios.filter(x => x !== sid); if (!on && r.why) delete r.why[sid]; };
@@ -758,17 +906,17 @@ function render(root) {
   $(root, '#rows').onchange = e => { if (e.target.matches('[data-rev]')) { rule(e.target.closest('tr').dataset.id).reviewed = e.target.checked; save(); draw(); } };
   const dt = $(root, '#detail');
   dt.onclick = e => {
-    const r = rule(view.sel), t = e.target;
-    if (t.classList.contains('x')) return dt.classList.remove('open');
+    const r = rule(view.sel), el = e.target;
+    if (el.classList.contains('x')) return dt.classList.remove('open');
     if (!r) return;
-    if (t.dataset.unlink) link(r, t.dataset.unlink, false);
-    else if (t.dataset.link) link(r, t.dataset.link, true);
-    else if (t.dataset.rmt) r.techniques = r.techniques.filter(x => x !== t.dataset.rmt);
-    else if (t.dataset.usetags !== undefined) { r.techniques = [...tagsOf(r)]; r.tagDiff = null; }
-    else if (t.dataset.addt !== undefined) {
+    if (el.dataset.unlink) link(r, el.dataset.unlink, false);
+    else if (el.dataset.link) link(r, el.dataset.link, true);
+    else if (el.dataset.rmt) r.techniques = r.techniques.filter(x => x !== el.dataset.rmt);
+    else if (el.dataset.usetags !== undefined) { r.techniques = [...tagsOf(r)]; r.tagDiff = null; }
+    else if (el.dataset.addt !== undefined) {
       const v = validate($(dt, '#addt').value.split(/[,\s]+/).filter(Boolean));
       r.techniques = [...new Set([...r.techniques, ...v.ok])]; r.mapped = true; r.rejected = v.rejected;
-    } else if (t.dataset.d === 'del') { if (!confirm('Supprimer cette règle ?')) return; state.rules = state.rules.filter(x => x !== r); view.sel = null; dt.classList.remove('open'); }
+    } else if (el.dataset.d === 'del') { if (!confirm(t('Supprimer cette règle ?'))) return; state.rules = state.rules.filter(x => x !== r); view.sel = null; dt.classList.remove('open'); }
     else return;
     save(); draw();
   };
@@ -779,15 +927,15 @@ function render(root) {
   };
   root.onkeydown = e => { if (e.key === 'Escape') dt.classList.remove('open'); };
 
-  $(root, '#demo').onclick = async () => { state.rules.push(...splitRules('exemple.yml', await sample('rules.yml'))); save(); draw(); };
-  $(root, '#addp').onclick = () => { const t = $(root, '#paste'); state.rules.push(...splitRules('collé', t.value)); t.value = ''; save(); draw(); };
+  $(root, '#demo').onclick = async () => { state.rules.push(...splitRules(t('exemple.yml'), await sample('rules.yml'))); save(); draw(); };
+  $(root, '#addp').onclick = () => { const p = $(root, '#paste'); state.rules.push(...splitRules(t('collé'), p.value)); p.value = ''; save(); draw(); };
   $(root, '#files').onchange = async e => {
     for (const f of await readFiles(e.target.files)) state.rules.push(...(f.name.endsWith('.json') ? fromJson(f.name, f.text) : splitRules(f.name, f.text)));
     e.target.value = ''; save(); draw();
   };
   const go = all => run($(root, '#st'), async (signal, say) => {
     const todo0 = state.rules.filter(r => all || !r.mapped), n = +state.settings.batch || 8, verify = $(root, '#verify').checked;
-    if (!todo0.length) throw new Error('Rien à mapper.');
+    if (!todo0.length) throw new Error(t('Rien à mapper.'));
     const S = sc(), todo = [];
     let nTags = 0;
     for (const r of todo0) { // 1. déterministe d'abord : techniques déclarées dans la règle
@@ -796,12 +944,11 @@ function render(root) {
       if (!tags.length || verify) todo.push(r);
     }
     save(); draw();
-    const done = `${nTags} règle(s) mappée(s) depuis leurs tags`;
-    if (!todo.length) return done + ', sans IA.';
-    if (!isAuthorized()) throw new Error(`${done}. ${todo.length} règle(s) restante(s) nécessitent l'IA : coche l'autorisation dans Paramètres.`);
+    if (!todo.length) return t('{n} règle(s) mappée(s) depuis leurs tags, sans IA.', { n: nTags });
+    if (!isAuthorized()) throw new Error(t('{n} règle(s) mappée(s) depuis leurs tags. {m} règle(s) restante(s) nécessitent l’IA : coche l’autorisation dans Paramètres.', { n: nTags, m: todo.length }));
     const system = SYSTEM(state.settings.stages, S);
     for (let i = 0; i < todo.length; i += n) {
-      say(`Lot ${i / n + 1}/${Math.ceil(todo.length / n)}…`);
+      say(t('Lot {i}/{n}…', { i: i / n + 1, n: Math.ceil(todo.length / n) }));
       const batch = todo.slice(i, i + n);
       const user = batch.map((r, k) => `### i=${k} (${r.name})\n${r.body.slice(0, 3000)}`).join('\n\n');
       const res = (await chatJson({ system, user, signal }));
@@ -814,7 +961,7 @@ function render(root) {
       }
       save(); draw();
     }
-    return `${done} ; ${todo.length} règle(s) traitée(s) par l'IA.`;
+    return t('{n} règle(s) mappée(s) depuis leurs tags ; {m} règle(s) traitée(s) par l’IA.', { n: nTags, m: todo.length });
   });
   $(root, '#map').onclick = () => go(false);
   $(root, '#remap').onclick = () => go(true);
@@ -829,21 +976,24 @@ __m.export = (() => {
 const { state, sref } = __m.store;
 const { attack, tech } = __m.attack;
 const { esc } = __m.ui;
-const LBL = { cov: 'Couvert', part: 'Partiel', gap: 'Écart' };
-const PRIO = { high: 'Haute', medium: 'Moyenne', low: 'Basse' };
+const { t, lang, locale } = __m.i18n;
+const LBL = { cov: t('Couvert'), part: t('Partiel'), gap: t('Écart') };
+const PRIO = { high: t('Haute'), medium: t('Moyenne'), low: t('Basse') };
 const prio = p => PRIO[p] || p || '';
 const name = id => tech(id)?.name || '';
 const scName = id => state.scenarios.find(s => s.id === id);
+const yesNo = b => b ? t('oui') : t('non');
+const origin = r => r.by === 'tags' ? 'tags' : r.by === 'ia' ? t('IA') : '';
 
 /** Recommandation déterministe pour une technique de scénario non couverte. */
 function reco(A, g) {
-  if (g.k === 'gap') return 'Aucune détection : créer une règle pour cette technique.';
+  if (g.k === 'gap') return t('Aucune détection : créer une règle pour cette technique.');
   const e = A.cm.get(g.id);
-  if (!e) return 'Seule la technique parente est couverte : vérifier que la détection couvre cette sous-technique.';
-  if (e.best < 2) return 'Détection de confiance basse : renforcer ou compléter la règle existante.';
-  const subs = attack.techniques.filter(t => t.id.startsWith(g.id + '.'));
-  const ok = subs.filter(t => (A.cm.get(t.id)?.exact || 0) >= 2).length;
-  return `Sous-techniques couvertes : ${ok}/${subs.length} ; compléter les variantes utilisées par les scénarios.`;
+  if (!e) return t('Seule la technique parente est couverte : vérifier que la détection couvre cette sous-technique.');
+  if (e.best < 2) return t('Détection de confiance basse : renforcer ou compléter la règle existante.');
+  const subs = attack.techniques.filter(x => x.id.startsWith(g.id + '.'));
+  const ok = subs.filter(x => (A.cm.get(x.id)?.exact || 0) >= 2).length;
+  return t('Sous-techniques couvertes : {n}/{m} ; compléter les variantes utilisées par les scénarios.', { n: ok, m: subs.length });
 }
 
 /* ---------- ATT&CK Navigator ---------- */
@@ -851,15 +1001,15 @@ const versions = () => ({ layer: '4.5', navigator: '5.1.0', attack: String(attac
 /** Couche globale (score = meilleure confiance) ou couche d'un scénario (3 couvert, 2 partiel, 1 écart). */
 function layer(A, s) {
   if (!s) return {
-    name: `MITREMapper : ${state.name}`, description: 'Couverture globale : score = meilleure confiance des règles (1 basse, 2 moyenne, 3 haute)',
+    name: `MITREMapper : ${state.name}`, description: t('Couverture globale : score = meilleure confiance des règles (1 basse, 2 moyenne, 3 haute)'),
     versions: versions(), domain: 'enterprise-attack', gradient: { colors: ['#ef9f27', '#2f9e5b'], minValue: 1, maxValue: 3 },
     techniques: [...A.cm].map(([techniqueID, e]) => ({ techniqueID, score: e.best, comment: e.rules.join('; ') })),
   };
   const x = A.scen.find(r => r.s === s), score = { gap: 1, part: 2, cov: 3 };
   return {
-    name: `${sref(s)} ${s.name}`, description: `Scénario ${sref(s)}, priorité ${prio(s.priority)} : 3 couvert, 2 partiel, 1 écart`,
+    name: `${sref(s)} ${s.name}`, description: t('Scénario {ref}, priorité {p} : 3 couvert, 2 partiel, 1 écart', { ref: sref(s), p: prio(s.priority) }),
     versions: versions(), domain: 'enterprise-attack', gradient: { colors: ['#e24b4a', '#ef9f27', '#2f9e5b'], minValue: 1, maxValue: 3 },
-    techniques: x.st.map(([techniqueID, k]) => ({ techniqueID, score: score[k], comment: `${LBL[k]} : ${(A.cm.get(techniqueID)?.rules || []).join('; ') || 'aucune règle'}` })),
+    techniques: x.st.map(([techniqueID, k]) => ({ techniqueID, score: score[k], comment: `${LBL[k]} : ${(A.cm.get(techniqueID)?.rules || []).join('; ') || t('aucune règle')}` })),
   };
 }
 const layersZip = A => zip({
@@ -905,22 +1055,22 @@ function sheet(rows, widths) {
 function workbook(A) {
   const c = state.client, refs = ids => ids.map(scName).filter(Boolean).map(sref).join(' '), rel = new Set(A.scen.flatMap(x => x.st.map(([id]) => id)));
   const sheets = {
-    'Synthèse': [[['Indicateur', 'Valeur'], ['Projet', state.name], ['Date', new Date().toLocaleDateString('fr-FR')], ['Référentiel', `ATT&CK Enterprise v${attack.version}`],
-      ['Secteur', c.sector], ['Taille', c.size], ['Pays / zones', c.country], ['Actifs clés', c.assets],
-      ['Scénarios', state.scenarios.length], ['Règles', state.rules.length], ['Règles validées', state.rules.filter(r => r.reviewed).length],
-      ['Techniques de scénario', A.nTech], ['Couvertes', A.tot.cov], ['Partielles', A.tot.part], ['Écarts', A.tot.gap], ['Couverture globale (%)', A.pct]], [28, 60]],
-    'Scénarios': [[['Réf', 'Scénario', 'Priorité', 'Acteurs', 'Résumé', 'Techniques', 'Couvertes', 'Partielles', 'Écarts', 'Couverture (%)', 'Règles liées'],
+    [t('Synthèse')]: [[[t('Indicateur'), t('Valeur')], [t('Projet'), state.name], [t('Date'), new Date().toLocaleDateString(locale)], [t('Référentiel'), `ATT&CK Enterprise v${attack.version}`],
+      [t('Secteur'), c.sector], [t('Taille'), c.size], [t('Pays / zones'), c.country], [t('Actifs clés'), c.assets],
+      [t('Scénarios'), state.scenarios.length], [t('Règles'), state.rules.length], [t('Règles validées'), state.rules.filter(r => r.reviewed).length],
+      [t('Techniques de scénario'), A.nTech], [t('Couvertes'), A.tot.cov], [t('Partielles'), A.tot.part], [t('Écarts'), A.tot.gap], [t('Couverture globale (%)'), A.pct]], [28, 60]],
+    [t('Scénarios')]: [[[t('Réf'), t('Scénario'), t('Priorité'), t('Acteurs'), t('Résumé'), t('Techniques'), t('Couvertes'), t('Partielles'), t('Écarts'), t('Couverture (%)'), t('Règles liées')],
       ...A.scen.map(({ s, c: n, pct }) => [sref(s), s.name, prio(s.priority), s.actors || '', s.summary || '', s.techniques.join(' '), n.cov, n.part, n.gap, pct,
         state.rules.filter(r => r.scenarios.includes(s.id)).length])], [6, 45, 10, 25, 60, 40, 11, 11, 8, 14, 12]],
-    'Écarts': [[['Technique', 'Nom', 'Statut', 'Priorité', 'Scénarios', 'Recommandation'],
+    [t('Écarts')]: [[[t('Technique'), t('Nom'), t('Statut'), t('Priorité'), t('Scénarios'), t('Recommandation')],
       ...A.gaps.map(g => [g.id, g.name, LBL[g.k], prio(['high', 'medium', 'low'][g.p]), g.scs.map(sref).join(' '), reco(A, g)])], [12, 40, 10, 10, 22, 80]],
-    'Règles': [[['Règle', 'Source', 'Origine', 'Techniques', 'Scénarios', 'Étape', 'Confiance', 'Validée', 'Note'],
-      ...state.rules.map(r => [r.name, r.source, r.by === 'tags' ? 'tags' : r.by === 'ia' ? 'IA' : '', r.techniques.join(' '), refs(r.scenarios), r.stage || '', r.confidence || '', r.reviewed ? 'oui' : 'non', r.note || ''])],
+    [t('Règles')]: [[[t('Règle'), t('Source'), t('Origine'), t('Techniques'), t('Scénarios'), t('Étape'), t('Confiance'), t('Validée'), t('Note')],
+      ...state.rules.map(r => [r.name, r.source, origin(r), r.techniques.join(' '), refs(r.scenarios), r.stage || '', r.confidence || '', yesNo(r.reviewed), r.note || ''])],
       [45, 16, 9, 30, 22, 14, 11, 9, 70]],
-    'Techniques': [[['Technique', 'Nom', 'Tactiques', 'Statut', 'Dans un scénario', 'Nb règles', 'Règles'],
-      ...attack.techniques.filter(t => rel.has(t.id) || A.cm.has(t.id)).map(t => {
-        const k = A.status(t.id), e = A.cm.get(t.id);
-        return [t.id, t.name, t.tactics.join(', '), k === 'gap' && !rel.has(t.id) ? '' : LBL[k], rel.has(t.id) ? 'oui' : 'non', e ? e.n : 0, e ? e.rules.join('; ') : ''];
+    [t('Techniques')]: [[[t('Technique'), t('Nom'), t('Tactiques'), t('Statut'), t('Dans un scénario'), t('Nb règles'), t('Règles')],
+      ...attack.techniques.filter(x => rel.has(x.id) || A.cm.has(x.id)).map(x => {
+        const k = A.status(x.id), e = A.cm.get(x.id);
+        return [x.id, x.name, x.tactics.join(', '), k === 'gap' && !rel.has(x.id) ? '' : LBL[k], yesNo(rel.has(x.id)), e ? e.n : 0, e ? e.rules.join('; ') : ''];
       })], [12, 40, 30, 10, 16, 10, 80]],
   };
   const names = Object.keys(sheets), ns = 'http://schemas.openxmlformats.org/';
@@ -937,17 +1087,18 @@ function workbook(A) {
 
 /* ---------- Rapport client (HTML imprimable) ---------- */
 function reportHtml(A) {
-  const c = state.client, date = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+  const c = state.client, date = new Date().toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' });
   const rel = new Set(A.scen.flatMap(x => x.st.map(([id]) => id.split('.')[0])));
   const validated = state.rules.filter(r => r.reviewed).length;
   const kpi = (v, l, cls = '') => `<div class="kpi ${cls}"><b>${v}</b><span>${l}</span></div>`;
-  const bar = n => { const t = n.cov + n.part + n.gap || 1; return `<div class="bar">${['cov', 'part', 'gap'].map(k => n[k] ? `<i class="${k}" style="width:${100 * n[k] / t}%"></i>` : '').join('')}</div>`; };
-  const parents = attack.techniques.filter(t => !t.id.includes('.'));
+  const bar = n => { const tot = n.cov + n.part + n.gap || 1; return `<div class="bar">${['cov', 'part', 'gap'].map(k => n[k] ? `<i class="${k}" style="width:${100 * n[k] / tot}%"></i>` : '').join('')}</div>`; };
+  const parents = attack.techniques.filter(x => !x.id.includes('.'));
   const cols = attack.tactics.map(tc => {
-    const cells = parents.filter(t => t.tactics.includes(tc.short)).map(t => [t, A.status(t.id)]).filter(([t, k]) => k !== 'gap' || rel.has(t.id));
-    return cells.length ? `<div class="col"><h4>${esc(tc.name)}</h4>${cells.map(([t, k]) => `<div class="cell ${k}${rel.has(t.id) ? ' rel' : ''}"><b>${t.id}</b> ${esc(t.name)}</div>`).join('')}</div>` : '';
+    const cells = parents.filter(x => x.tactics.includes(tc.short)).map(x => [x, A.status(x.id)]).filter(([x, k]) => k !== 'gap' || rel.has(x.id));
+    return cells.length ? `<div class="col"><h4>${esc(tc.name)}</h4>${cells.map(([x, k]) => `<div class="cell ${k}${rel.has(x.id) ? ' rel' : ''}"><b>${x.id}</b> ${esc(x.name)}</div>`).join('')}</div>` : '';
   }).join('');
-  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Couverture de détection : ${esc(state.name)}</title><style>
+  const profile = [c.sector, c.size, c.country].filter(Boolean);
+  return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><title>${t('Couverture de détection : {name}', { name: esc(state.name) })}</title><style>
 :root{--ind:#451DC7;--ind8:#2D1380;--ink:#16121F;--mut:#6B6580;--line:#E6E4EE;--cov:#04F06A;--covt:#088A42;--part:#EF9F27;--partb:#FEF6E8;--gap:#E24B4A;--gapb:#FDF1F1}
 *{box-sizing:border-box}body{margin:0;font:11pt/1.5 Inter,'Segoe UI',system-ui,sans-serif;color:var(--ink);background:#fff}
 h1,h2,h3,h4{font-family:Poppins,'Segoe UI',system-ui,sans-serif;line-height:1.25}
@@ -968,41 +1119,41 @@ tr{break-inside:avoid}.ref{display:inline-block;background:var(--ind);color:#fff
 @page{size:A4;margin:12mm}@page matrice{size:A4 landscape;margin:10mm}.pg-matrix{page:matrice;break-before:page}
 @media print{.noprint{display:none}header{-webkit-print-color-adjust:exact;print-color-adjust:exact}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}h2{break-after:avoid}}
 </style></head><body>
-<div class="noprint"><button onclick="print()">Imprimer / PDF</button></div>
-<header><h1>Couverture de détection : ${esc(state.name)}</h1>
-<p>${date} · Référentiel MITRE ATT&amp;CK Enterprise v${esc(attack.version)}${[c.sector, c.size, c.country].filter(Boolean).length ? ' · ' + esc([c.sector, c.size, c.country].filter(Boolean).join(' · ')) : ''}</p></header>
+<div class="noprint"><button onclick="print()">${t('Imprimer / PDF')}</button></div>
+<header><h1>${t('Couverture de détection : {name}', { name: esc(state.name) })}</h1>
+<p>${date} · ${t('Référentiel MITRE ATT&amp;CK Enterprise v{v}', { v: esc(attack.version) })}${profile.length ? ' · ' + esc(profile.join(' · ')) : ''}</p></header>
 <main>
-<h2>Synthèse</h2>
-<div class="kpis">${kpi(A.pct + ' %', 'des techniques des scénarios couvertes', 'cov')}${kpi(state.scenarios.length, 'scénarios de menace')}${kpi(state.rules.length, `règles analysées (${validated} validées)`)}${kpi(A.tot.cov, 'techniques couvertes', 'cov')}${kpi(A.tot.part, 'techniques partielles', 'part')}${kpi(A.tot.gap, 'écarts de détection', 'gap')}</div>
-<p>Sur les ${A.nTech} techniques ATT&amp;CK mobilisées par les ${state.scenarios.length} scénarios retenus${c.assets ? ` (actifs clés : ${esc(c.assets)})` : ''}, ${A.tot.cov} sont couvertes par au moins une règle fiable, ${A.tot.part} le sont partiellement et ${A.tot.gap} ne disposent d'aucune détection.${A.gaps.length ? ` Les ${Math.min(5, A.gaps.length)} actions prioritaires portent sur ${A.gaps.slice(0, 5).map(g => `${g.id} (${esc(g.name)})`).join(', ')}.` : ''}</p>
+<h2>${t('Synthèse')}</h2>
+<div class="kpis">${kpi(A.pct + ' %', t('des techniques des scénarios couvertes'), 'cov')}${kpi(state.scenarios.length, t('scénarios de menace'))}${kpi(state.rules.length, t('règles analysées ({n} validées)', { n: validated }))}${kpi(A.tot.cov, t('techniques couvertes'), 'cov')}${kpi(A.tot.part, t('techniques partielles'), 'part')}${kpi(A.tot.gap, t('écarts de détection'), 'gap')}</div>
+<p>${t('Sur les {n} techniques ATT&amp;CK mobilisées par les {s} scénarios retenus{assets}, {cov} sont couvertes par au moins une règle fiable, {part} le sont partiellement et {gap} ne disposent d’aucune détection.', { n: A.nTech, s: state.scenarios.length, assets: c.assets ? t(' (actifs clés : {a})', { a: esc(c.assets) }) : '', cov: A.tot.cov, part: A.tot.part, gap: A.tot.gap })}${A.gaps.length ? ' ' + t('Les {n} actions prioritaires portent sur {list}.', { n: Math.min(5, A.gaps.length), list: A.gaps.slice(0, 5).map(g => `${g.id} (${esc(g.name)})`).join(', ') }) : ''}</p>
 
-<h2>Couverture par scénario</h2>
-<table><thead><tr><th>Réf</th><th>Scénario</th><th>Priorité</th><th>Couverture</th><th></th><th>Détail</th></tr></thead><tbody>
-${A.scen.map(({ s, c: n, pct }) => `<tr><td><span class="ref">${sref(s)}</span></td><td><b>${esc(s.name)}</b>${s.actors ? `<div class="mut">${esc(s.actors)}</div>` : ''}</td><td>${prio(s.priority)}</td><td>${bar(n)}</td><td><b>${pct} %</b></td><td class="mut">${n.cov} couvertes, ${n.part} partielles, ${n.gap} écarts</td></tr>`).join('')}
+<h2>${t('Couverture par scénario')}</h2>
+<table><thead><tr><th>${t('Réf')}</th><th>${t('Scénario')}</th><th>${t('Priorité')}</th><th>${t('Couverture')}</th><th></th><th>${t('Détail')}</th></tr></thead><tbody>
+${A.scen.map(({ s, c: n, pct }) => `<tr><td><span class="ref">${sref(s)}</span></td><td><b>${esc(s.name)}</b>${s.actors ? `<div class="mut">${esc(s.actors)}</div>` : ''}</td><td>${prio(s.priority)}</td><td>${bar(n)}</td><td><b>${pct} %</b></td><td class="mut">${t('{c} couvertes, {p} partielles, {g} écarts', { c: n.cov, p: n.part, g: n.gap })}</td></tr>`).join('')}
 </tbody></table>
 
-<h2>Écarts prioritaires et recommandations</h2>
-${A.gaps.length ? `<table><thead><tr><th>Technique</th><th>Statut</th><th>Priorité</th><th>Scénarios</th><th>Recommandation</th></tr></thead><tbody>
+<h2>${t('Écarts prioritaires et recommandations')}</h2>
+${A.gaps.length ? `<table><thead><tr><th>${t('Technique')}</th><th>${t('Statut')}</th><th>${t('Priorité')}</th><th>${t('Scénarios')}</th><th>${t('Recommandation')}</th></tr></thead><tbody>
 ${A.gaps.map(g => `<tr><td><b>${g.id}</b> ${esc(g.name)}</td><td class="st ${g.k}">${LBL[g.k]}</td><td>${prio(['high', 'medium', 'low'][g.p])}</td><td>${g.scs.map(s => `<span class="ref" title="${esc(s.name)}">${sref(s)}</span>`).join(' ')}</td><td>${esc(reco(A, g))}</td></tr>`).join('')}
-</tbody></table>` : '<p>Aucun écart : toutes les techniques des scénarios sont couvertes.</p>'}
+</tbody></table>` : `<p>${t('Aucun écart : toutes les techniques des scénarios sont couvertes.')}</p>`}
 
-<section class="pg-matrix"><h2>Matrice ATT&amp;CK</h2>
-<p class="legend"><span><i style="background:var(--cov)"></i>Couvert</span><span><i style="background:var(--partb);border:1px solid var(--part)"></i>Partiel</span><span><i style="background:var(--gapb);border:1px solid var(--gap)"></i>Écart (technique d'un scénario)</span><span><i style="background:#fff;box-shadow:inset 3px 0 0 var(--ind);border:1px solid var(--line)"></i>Technique d'un scénario</span></p>
+<section class="pg-matrix"><h2>${t('Matrice ATT&amp;CK')}</h2>
+<p class="legend"><span><i style="background:var(--cov)"></i>${t('Couvert')}</span><span><i style="background:var(--partb);border:1px solid var(--part)"></i>${t('Partiel')}</span><span><i style="background:var(--gapb);border:1px solid var(--gap)"></i>${t('Écart (technique d’un scénario)')}</span><span><i style="background:#fff;box-shadow:inset 3px 0 0 var(--ind);border:1px solid var(--line)"></i>${t('Technique d’un scénario')}</span></p>
 <div class="matrix">${cols}</div></section>
 
-<h2>Inventaire des règles</h2>
-<table><thead><tr><th>Règle</th><th>Techniques</th><th>Scénarios</th><th>Étape</th><th>Confiance</th><th>Origine</th><th>Validée</th></tr></thead><tbody>
-${state.rules.map(r => `<tr><td><b>${esc(r.name)}</b><div class="mut">${esc(r.source)}</div></td><td>${r.techniques.map(t => `<span title="${esc(name(t))}">${t}</span>`).join(', ')}</td><td>${r.scenarios.map(scName).filter(Boolean).map(s => `<span class="ref">${sref(s)}</span>`).join(' ')}</td><td>${esc(r.stage || '')}</td><td>${esc(r.confidence || '')}</td><td>${r.by === 'tags' ? 'tags' : r.by === 'ia' ? 'IA' : ''}</td><td>${r.reviewed ? 'oui' : 'non'}</td></tr>`).join('')}
+<h2>${t('Inventaire des règles')}</h2>
+<table><thead><tr><th>${t('Règle')}</th><th>${t('Techniques')}</th><th>${t('Scénarios')}</th><th>${t('Étape')}</th><th>${t('Confiance')}</th><th>${t('Origine')}</th><th>${t('Validée')}</th></tr></thead><tbody>
+${state.rules.map(r => `<tr><td><b>${esc(r.name)}</b><div class="mut">${esc(r.source)}</div></td><td>${r.techniques.map(id => `<span title="${esc(name(id))}">${id}</span>`).join(', ')}</td><td>${r.scenarios.map(scName).filter(Boolean).map(s => `<span class="ref">${sref(s)}</span>`).join(' ')}</td><td>${esc(r.stage || '')}</td><td>${esc(r.confidence || '')}</td><td>${origin(r)}</td><td>${yesNo(r.reviewed)}</td></tr>`).join('')}
 </tbody></table>
 
-<h2>Méthode et limites</h2>
+<h2>${t('Méthode et limites')}</h2>
 <ul>
-<li>Scénarios dérivés de sources CTI et du profil client ; techniques validées contre le référentiel MITRE ATT&amp;CK Enterprise v${esc(attack.version)}.</li>
-<li>Règles mappées à partir de leurs tags ATT&amp;CK quand ils existent, sinon par analyse assistée par IA ; ${validated}/${state.rules.length} règles relues et validées par un analyste.</li>
-<li><b>Couvert</b> : règle de confiance moyenne ou haute sur la technique, ou sur toutes ses sous-techniques. <b>Partiel</b> : seulement certaines sous-techniques, confiance basse, ou seule la technique parente. <b>Écart</b> : aucune règle.</li>
-<li>La couverture mesure l'existence de détections, pas leur efficacité opérationnelle (qualité des journaux, taux de faux positifs, délais de traitement).</li>
+<li>${t('Scénarios dérivés de sources CTI et du profil client ; techniques validées contre le référentiel MITRE ATT&amp;CK Enterprise v{v}.', { v: esc(attack.version) })}</li>
+<li>${t('Règles mappées à partir de leurs tags ATT&amp;CK quand ils existent, sinon par analyse assistée par IA ; {n}/{m} règles relues et validées par un analyste.', { n: validated, m: state.rules.length })}</li>
+<li>${t('<b>Couvert</b> : règle de confiance moyenne ou haute sur la technique, ou sur toutes ses sous-techniques. <b>Partiel</b> : seulement certaines sous-techniques, confiance basse, ou seule la technique parente. <b>Écart</b> : aucune règle.')}</li>
+<li>${t('La couverture mesure l’existence de détections, pas leur efficacité opérationnelle (qualité des journaux, taux de faux positifs, délais de traitement).')}</li>
 </ul>
-<p class="mut">Généré par MITREMapper (Wavestone) le ${date}.</p>
+<p class="mut">${t('Généré par MITREMapper (Wavestone) le {date}.', { date })}</p>
 </main></body></html>`;
 }
 
@@ -1013,6 +1164,7 @@ const { state, exportJson, download, loadDemo, sref } = __m.store;
 const { attack, parentOf, tech } = __m.attack;
 const { reportHtml, workbook, layer, layersZip } = __m.export;
 const { esc, $, showProject } = __m.ui;
+const { t } = __m.i18n;
 const RANK = { low: 1, medium: 2, high: 3 };
 /** id -> {n, best, exact, rules[], items[]} : une règle sur une sous-technique compte aussi pour la parente ;
  *  exact = meilleure confiance des règles qui citent la technique elle-même. */
@@ -1020,7 +1172,7 @@ function coverageMap(rules = state.rules) {
   const m = new Map();
   for (const r of rules) {
     const c = RANK[r.confidence] || 2, ids = new Map(); // id -> cité exactement par la règle ?
-    for (const t of r.techniques) { ids.set(t, true); if (!ids.has(parentOf(t))) ids.set(parentOf(t), false); }
+    for (const x of r.techniques) { ids.set(x, true); if (!ids.has(parentOf(x))) ids.set(parentOf(x), false); }
     for (const [id, exact] of ids) {
       const e = m.get(id) || { n: 0, best: 0, exact: 0, rules: [], items: [] };
       e.n++; e.best = Math.max(e.best, c); if (exact) e.exact = Math.max(e.exact, c); e.rules.push(r.name); e.items.push(r); m.set(id, e);
@@ -1028,7 +1180,7 @@ function coverageMap(rules = state.rules) {
   }
   return m;
 }
-const subsOf = id => attack.techniques.filter(t => t.id.startsWith(id + '.')).map(t => t.id);
+const subsOf = id => attack.techniques.filter(x => x.id.startsWith(id + '.')).map(x => x.id);
 /** Statut d'une technique :
  *  cov  = règle medium+ sur la technique elle-même, ou toutes ses sous-techniques couvertes (medium+) ;
  *  part = seulement certaines sous-techniques, confiance basse, ou (pour une sous-technique) seule la parente est couverte ;
@@ -1040,7 +1192,7 @@ function status(cm, id) {
   const subs = id.includes('.') ? [] : subsOf(id);
   return subs.length && subs.every(s => (cm.get(s)?.exact || 0) >= 2) ? 'cov' : 'part';
 }
-const LABEL = { cov: 'couvert', part: 'partiel', gap: 'écart' };
+const LABEL = { cov: t('couvert'), part: t('partiel'), gap: t('écart') };
 const PRIO = { high: 0, medium: 1, low: 2 };
 /** Analyse partagée par l'écran et les exports : statuts par scénario, écarts priorisés, totaux. */
 function analysis() {
@@ -1060,66 +1212,66 @@ function analysis() {
   uniq.forEach(k => tot[k]++);
   return { cm, status: id => status(cm, id), scen, gaps, tot, nTech: uniq.size, pct: uniq.size ? Math.round(100 * tot.cov / uniq.size) : 0 };
 }
-const SHOW = { all: 'Toutes les techniques', scenario: 'Techniques des scénarios', gap: 'Écarts uniquement', cov: 'Couvertes uniquement' };
+const SHOW = { all: t('Toutes les techniques'), scenario: t('Techniques des scénarios'), gap: t('Écarts uniquement'), cov: t('Couvertes uniquement') };
 const view = { q: '', sc: '', show: 'all' }; // filtres conservés tant que la page est ouverte
 
 function render(root) {
   const cm = coverageMap();
-  const parents = attack.techniques.filter(t => !t.id.includes('.'));
+  const parents = attack.techniques.filter(x => !x.id.includes('.'));
   const relSet = () => new Set(state.scenarios.filter(s => !view.sc || s.id === view.sc).flatMap(s => s.techniques.map(parentOf)));
-  const kind = (t, rel) => { const k = status(cm, t.id); return k === 'gap' ? (rel.has(t.id) ? 'gap' : 'none') : k; };
+  const kind = (te, rel) => { const k = status(cm, te.id); return k === 'gap' ? (rel.has(te.id) ? 'gap' : 'none') : k; };
 
   const A = analysis(), total = A.nTech;
   const rowsHtml = A.scen.map(({ s, st, c, pct }) => `<tr><td><b class="tag sref">${sref(s)}</b> <b>${esc(s.name)}</b> <span class="tag">${esc(s.priority)}</span></td>
-      <td>${pct}% <span class="mut">(${c.cov} couvertes, ${c.part} partielles, ${c.gap} écarts)</span></td>
+      <td>${pct}% <span class="mut">(${t('{c} couvertes, {p} partielles, {g} écarts', { c: c.cov, p: c.part, g: c.gap })})</span></td>
       <td>${st.map(([id, k]) => `<span class="tag ${k}" title="${esc(tech(id)?.name)}">${id}</span>`).join('')}</td></tr>`).join('');
   const gapRows = A.gaps.map(g => `<tr><td>${g.id} ${esc(g.name)}</td><td class="${g.k}">${LABEL[g.k]}</td><td>${g.scs.map(s => `<div><span class="tag sref">${sref(s)}</span> ${esc(s.name)}</div>`).join('')}</td></tr>`).join('');
 
-  root.innerHTML = `${state.rules.length || state.scenarios.length ? '' : '<div class="card"><b>Aucune donnée.</b> Génère des scénarios et mappe des règles, ou <button id="demo" class="pri">charge la démo complète</button></div>'}
-  <div class="bar"><button id="rep" class="pri">Rapport client (PDF)</button><button id="reph">Rapport (HTML)</button><button id="xlsx">Classeur Excel</button><button id="nav">Couche Navigator</button><button id="navz">Couches Navigator par scénario (.zip)</button><button id="csv">CSV (règles)</button>
-    <span class="mut">${state.rules.length} règles · ${state.scenarios.length} scénarios · ${total} techniques de scénario</span></div>
-  <h2>Matrice ATT&CK</h2>
+  root.innerHTML = `${state.rules.length || state.scenarios.length ? '' : `<div class="card"><b>${t('Aucune donnée.')}</b> ${t('Génère des scénarios et mappe des règles, ou')} <button id="demo" class="pri">${t('charge la démo complète')}</button></div>`}
+  <div class="bar"><button id="rep" class="pri">${t('Rapport client (PDF)')}</button><button id="reph">${t('Rapport (HTML)')}</button><button id="xlsx">${t('Classeur Excel')}</button><button id="nav">${t('Couche Navigator')}</button><button id="navz">${t('Couches Navigator par scénario (.zip)')}</button><button id="csv">${t('CSV (règles)')}</button>
+    <span class="mut">${t('{r} règles · {s} scénarios · {n} techniques de scénario', { r: state.rules.length, s: state.scenarios.length, n: total })}</span></div>
+  <h2>${t('Matrice ATT&CK')}</h2>
   <div class="mtools">
-    <input id="q" type="search" placeholder="Chercher T1059 ou « credential »" aria-label="Chercher une technique">
-    <select id="msc" aria-label="Scénario"><option value="">Tous les scénarios</option>${state.scenarios.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select>
-    <select id="mshow" aria-label="Afficher">${Object.entries(SHOW).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
+    <input id="q" type="search" placeholder="${t('Chercher T1059 ou « credential »')}" aria-label="${t('Chercher une technique')}">
+    <select id="msc" aria-label="${t('Scénario')}"><option value="">${t('Tous les scénarios')}</option>${state.scenarios.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select>
+    <select id="mshow" aria-label="${t('Afficher')}">${Object.entries(SHOW).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
     <span id="legend"></span>
   </div>
   <div id="matrix" class="matrix"></div><aside id="detail" aria-live="polite"></aside>
-  <h2>Couverture par scénario</h2><table><thead><tr><th>Scénario</th><th>Couverture</th><th>Techniques</th></tr></thead><tbody>${rowsHtml || '<tr><td colspan=3 class="mut">Aucun scénario</td></tr>'}</tbody></table>
-  <h2>Écarts priorisés</h2><table><thead><tr><th>Technique</th><th>Statut</th><th>Scénarios concernés</th></tr></thead><tbody>${gapRows || '<tr><td colspan=3 class="mut">Aucun écart</td></tr>'}</tbody></table>`;
+  <h2>${t('Couverture par scénario')}</h2><table><thead><tr><th>${t('Scénario')}</th><th>${t('Couverture')}</th><th>${t('Techniques')}</th></tr></thead><tbody>${rowsHtml || `<tr><td colspan=3 class="mut">${t('Aucun scénario')}</td></tr>`}</tbody></table>
+  <h2>${t('Écarts priorisés')}</h2><table><thead><tr><th>${t('Technique')}</th><th>${t('Statut')}</th><th>${t('Scénarios concernés')}</th></tr></thead><tbody>${gapRows || `<tr><td colspan=3 class="mut">${t('Aucun écart')}</td></tr>`}</tbody></table>`;
 
   function drawMatrix() {
     const rel = relSet(), q = view.q.trim().toLowerCase(), n = { cov: 0, part: 0, gap: 0 };
-    for (const t of parents) { const k = kind(t, rel); if (rel.has(t.id) && k !== 'none') n[k]++; }
-    const keep = (t, k) => (!q || (t.id + ' ' + t.name).toLowerCase().includes(q))
-      && (view.show === 'all' || (view.show === 'scenario' && rel.has(t.id)) || (view.show === 'gap' && k === 'gap') || (view.show === 'cov' && k === 'cov'));
+    for (const te of parents) { const k = kind(te, rel); if (rel.has(te.id) && k !== 'none') n[k]++; }
+    const keep = (te, k) => (!q || (te.id + ' ' + te.name).toLowerCase().includes(q))
+      && (view.show === 'all' || (view.show === 'scenario' && rel.has(te.id)) || (view.show === 'gap' && k === 'gap') || (view.show === 'cov' && k === 'cov'));
     const cols = attack.tactics.map(tc => {
-      const all = parents.filter(t => t.tactics.includes(tc.short));
-      const relAll = all.filter(t => rel.has(t.id)), relCov = relAll.filter(t => kind(t, rel) === 'cov');
-      const cells = all.filter(t => keep(t, kind(t, rel)));
+      const all = parents.filter(te => te.tactics.includes(tc.short));
+      const relAll = all.filter(te => rel.has(te.id)), relCov = relAll.filter(te => kind(te, rel) === 'cov');
+      const cells = all.filter(te => keep(te, kind(te, rel)));
       if (!cells.length && (view.show !== 'all' || q)) return '';
-      return `<div class="col"><h3>${esc(tc.name)}${relAll.length ? `<span title="Techniques de scénario couvertes dans cette tactique">${relCov.length}/${relAll.length}</span>` : ''}</h3>${cells.map(t => {
-        const k = kind(t, rel), e = cm.get(t.id);
-        return `<button class="cell ${k} ${rel.has(t.id) ? 'rel' : ''}" data-id="${t.id}"><b>${t.id}</b>${e ? `<i>×${e.n}</i>` : ''}<span>${esc(t.name)}</span></button>`;
+      return `<div class="col"><h3>${esc(tc.name)}${relAll.length ? `<span title="${t('Techniques de scénario couvertes dans cette tactique')}">${relCov.length}/${relAll.length}</span>` : ''}</h3>${cells.map(te => {
+        const k = kind(te, rel), e = cm.get(te.id);
+        return `<button class="cell ${k} ${rel.has(te.id) ? 'rel' : ''}" data-id="${te.id}"><b>${te.id}</b>${e ? `<i>×${e.n}</i>` : ''}<span>${esc(te.name)}</span></button>`;
       }).join('')}</div>`;
     }).join('');
-    $(root, '#matrix').innerHTML = cols || '<p class="mut" style="padding:1rem">Aucune technique ne correspond à ces filtres.</p>';
-    $(root, '#legend').innerHTML = `<span class="lg cov">Couvert ${n.cov}</span><span class="lg part">Partiel ${n.part}</span><span class="lg gap">Écart ${n.gap}</span><span class="lg none">Hors scénarios</span>`;
+    $(root, '#matrix').innerHTML = cols || `<p class="mut" style="padding:1rem">${t('Aucune technique ne correspond à ces filtres.')}</p>`;
+    $(root, '#legend').innerHTML = `<span class="lg cov">${t('Couvert')} ${n.cov}</span><span class="lg part">${t('Partiel')} ${n.part}</span><span class="lg gap">${t('Écart')} ${n.gap}</span><span class="lg none">${t('Hors scénarios')}</span>`;
   }
 
   function openDetail(id) {
-    const t = parents.find(x => x.id === id), e = cm.get(id), k = kind(t, relSet());
+    const te = parents.find(x => x.id === id), e = cm.get(id), k = kind(te, relSet());
     const scs = state.scenarios.filter(s => s.techniques.some(x => parentOf(x) === id));
     const subs = attack.techniques.filter(x => x.id.startsWith(id + '.'));
-    const st = { cov: ['cov', 'Couvert'], part: ['part', 'Partiel'], gap: ['gap', 'Écart : aucune règle'], none: ['', 'Non couvert, hors scénarios'] }[k];
-    const rules = e ? e.items.map(r => `<div class="item"><b>${esc(r.name)}</b><div class="mut">${r.techniques.map(x => `<span class="tag">${x}</span>`).join('')} ${esc(r.confidence || '')}${r.stage ? ' · ' + esc(r.stage) : ''}</div></div>`).join('') : '<p class="mut">Aucune règle ne cible cette technique.</p>';
-    const scn = scs.map(s => `<div class="item">${esc(s.name)} <span class="tag">${esc(s.priority)}</span></div>`).join('') || '<p class="mut">Aucun scénario ne l’utilise.</p>';
-    const sub = subs.map(x => { const c = cm.get(x.id); return `<div class="item sub"><span class="tag ${c ? (c.best >= 2 ? 'cov' : 'part') : ''}">${x.id}</span> ${esc(x.name)}${c ? ` <span class="mut">×${c.n}</span>` : ''}</div>`; }).join('') || '<p class="mut">Aucune.</p>';
+    const st = { cov: ['cov', t('Couvert')], part: ['part', t('Partiel')], gap: ['gap', t('Écart : aucune règle')], none: ['', t('Non couvert, hors scénarios')] }[k];
+    const rules = e ? e.items.map(r => `<div class="item"><b>${esc(r.name)}</b><div class="mut">${r.techniques.map(x => `<span class="tag">${x}</span>`).join('')} ${esc(r.confidence || '')}${r.stage ? ' · ' + esc(r.stage) : ''}</div></div>`).join('') : `<p class="mut">${t('Aucune règle ne cible cette technique.')}</p>`;
+    const scn = scs.map(s => `<div class="item">${esc(s.name)} <span class="tag">${esc(s.priority)}</span></div>`).join('') || `<p class="mut">${t('Aucun scénario ne l’utilise.')}</p>`;
+    const sub = subs.map(x => { const c = cm.get(x.id); return `<div class="item sub"><span class="tag ${c ? (c.best >= 2 ? 'cov' : 'part') : ''}">${x.id}</span> ${esc(x.name)}${c ? ` <span class="mut">×${c.n}</span>` : ''}</div>`; }).join('') || `<p class="mut">${t('Aucune.')}</p>`;
     const d = $(root, '#detail');
-    d.innerHTML = `<button class="x" aria-label="Fermer">×</button><h3>${id} ${esc(t.name)}</h3>
-      <p><span class="tag ${st[0]}">${st[1]}</span> <a href="https://attack.mitre.org/techniques/${id}/" target="_blank" rel="noopener">Fiche MITRE</a></p>
-      <h4>Règles (${e ? e.items.length : 0})</h4>${rules}<h4>Scénarios (${scs.length})</h4>${scn}<h4>Sous-techniques (${subs.filter(x => (cm.get(x.id)?.exact || 0) >= 2).length}/${subs.length} couvertes)</h4>${sub}`;
+    d.innerHTML = `<button class="x" aria-label="${t('Fermer')}">×</button><h3>${id} ${esc(te.name)}</h3>
+      <p><span class="tag ${st[0]}">${st[1]}</span> <a href="https://attack.mitre.org/techniques/${id}/" target="_blank" rel="noopener">${t('Fiche MITRE')}</a></p>
+      <h4>${t('Règles')} (${e ? e.items.length : 0})</h4>${rules}<h4>${t('Scénarios')} (${scs.length})</h4>${scn}<h4>${t('Sous-techniques ({n}/{m} couvertes)', { n: subs.filter(x => (cm.get(x.id)?.exact || 0) >= 2).length, m: subs.length })}</h4>${sub}`;
     d.classList.add('open'); $(d, '.x').focus();
   }
 
@@ -1135,15 +1287,15 @@ function render(root) {
 
   const slug = state.name.normalize('NFD').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'projet';
   const html = () => new Blob([reportHtml(analysis())], { type: 'text/html' });
-  $(root, '#rep').onclick = () => { const w = window.open(URL.createObjectURL(html())); if (!w) alert('Fenêtre bloquée : autorise les pop-ups ou utilise « Rapport (HTML) ».'); };
-  $(root, '#reph').onclick = () => download(`mitremapper-rapport-${slug}.html`, html());
+  $(root, '#rep').onclick = () => { const w = window.open(URL.createObjectURL(html())); if (!w) alert(t('Fenêtre bloquée : autorise les pop-ups ou utilise « Rapport (HTML) ».')); };
+  $(root, '#reph').onclick = () => download(`mitremapper-${t('rapport')}-${slug}.html`, html());
   $(root, '#xlsx').onclick = () => download(`mitremapper-${slug}.xlsx`, workbook(analysis()));
   // couche du scénario sélectionné dans le filtre, sinon couche globale
   $(root, '#nav').onclick = () => { const s = state.scenarios.find(x => x.id === view.sc); exportJson(`mitremapper-layer-${s ? sref(s) : 'global'}.json`, layer(analysis(), s)); };
   $(root, '#navz').onclick = () => download(`mitremapper-layers-${slug}.zip`, layersZip(analysis()));
   $(root, '#csv').onclick = () => {
     const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`, sc = id => state.scenarios.find(s => s.id === id)?.name;
-    exportJson('mitremapper-rules.csv', ['règle,source,techniques,scénarios,étape,confiance,note',
+    exportJson('mitremapper-rules.csv', [t('règle,source,techniques,scénarios,étape,confiance,note'),
       ...state.rules.map(r => [r.name, r.source, r.techniques.join(' '), r.scenarios.map(sc).join(' | '), r.stage, r.confidence, r.note].map(q).join(','))].join('\n'));
   };
 }
@@ -1152,24 +1304,34 @@ return { coverageMap, status, LABEL, analysis, render };
 })();
 const { loadAttack, attack } = __m.attack;
 const { showProject } = __m.ui;
+const { t, lang, setLang } = __m.i18n;
 const settings = __m.settings;
 const scenarios = __m.scenarios;
 const mapping = __m.mapping;
 const coverage = __m.coverage;
-const views = { Scénarios: scenarios, Règles: mapping, Couverture: coverage, Paramètres: settings };
+// id d'onglet (ancre d'URL) -> [module, libellé] ; les anciennes ancres françaises restent acceptées
+const views = { scenarios: [scenarios, t('Scénarios')], rules: [mapping, t('Règles')], coverage: [coverage, t('Couverture')], settings: [settings, t('Paramètres')] };
+const legacy = { 'Scénarios': 'scenarios', 'Règles': 'rules', 'Couverture': 'coverage', 'Paramètres': 'settings' };
 const tabs = document.getElementById('tabs'), view = document.getElementById('view');
-function show(name) {
-  [...tabs.children].forEach(b => b.classList.toggle('on', b.textContent === name));
-  view.replaceChildren(); views[name].render(view); showProject();
-  location.hash = name;
+function show(id) {
+  [...tabs.children].forEach(b => b.classList.toggle('on', b.dataset.id === id));
+  view.replaceChildren(); views[id][0].render(view); showProject();
+  location.hash = id;
 }
-for (const n of Object.keys(views)) {
-  const b = document.createElement('button'); b.textContent = n; b.onclick = () => show(n); tabs.append(b);
+for (const [id, [, label]] of Object.entries(views)) {
+  const b = document.createElement('button'); b.textContent = label; b.dataset.id = id; b.onclick = () => show(id); tabs.append(b);
 }
+document.documentElement.lang = lang;
+document.querySelector('footer').textContent = t('MITREMapper · Wavestone — Outil d’aide à la couverture de détection ATT&CK · Les propositions du LLM sont à relire');
+document.getElementById('proj').title = t('Projet courant (Paramètres → Projets)');
+const lb = document.getElementById('lang');
+lb.textContent = lang === 'en' ? 'FR' : 'EN';
+lb.title = lang === 'en' ? 'Passer l’interface en français' : 'Switch the interface to English';
+lb.onclick = () => { setLang(lang === 'en' ? 'fr' : 'en'); location.reload(); };
 await loadAttack();
 document.getElementById('ver').textContent = `ATT&CK Enterprise v${attack.version}`;
 const h = decodeURIComponent(location.hash.slice(1));
-show(views[h] ? h : 'Paramètres');
+show(views[h] ? h : legacy[h] || 'settings');
 
 </script>
 </body>

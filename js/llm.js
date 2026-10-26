@@ -1,5 +1,6 @@
 import { state } from './store.js';
 import { getKey, isAuthorized } from './keys.js';
+import { t } from './i18n.js';
 
 /** Registre des fournisseurs. kind : protocole (openai | anthropic | azure). models : liste de secours si le chargement échoue. */
 export const PROVIDERS = {
@@ -28,7 +29,7 @@ export const redact = (t, key) => {
   return s.replace(/Bearer\s+[\w.~+\/-]+=*/gi, 'Bearer ***').replace(/\bsk-[\w-]{8,}/g, 'sk-***');
 };
 function fail(ctx, msg, code, status) {
-  const ctxTxt = `${ctx.op} · ${PROVIDERS[ctx.provider]?.label || ctx.provider} · ${ctx.model || 'modèle non défini'}${status ? ' · HTTP ' + status : ''}${code ? ' · ' + code : ''}`;
+  const ctxTxt = `${ctx.op} · ${t(PROVIDERS[ctx.provider]?.label || ctx.provider)} · ${ctx.model || t('modèle non défini')}${status ? ' · HTTP ' + status : ''}${code ? ' · ' + code : ''}`;
   throw new LLMError(`[${ctxTxt}] ${redact(msg, ctx.key)}`, { ...ctx, status, code, key: undefined });
 }
 
@@ -37,17 +38,17 @@ const LOOPBACK = ['127.0.0.1', 'localhost', '[::1]'];
 export function config(op) {
   const s = state.settings, p = PROVIDERS[s.provider];
   const ctx = { op, provider: s.provider, model: p?.kind === 'azure' ? s.deployment : s.model };
-  if (!isAuthorized()) fail(ctx, 'Utilisation de l’IA non autorisée : coche la case de confirmation dans Paramètres.', 'not_authorized');
-  if (!p) fail(ctx, 'Fournisseur inconnu.', 'bad_provider');
+  if (!isAuthorized()) fail(ctx, t('Utilisation de l’IA non autorisée : coche la case de confirmation dans Paramètres.'), 'not_authorized');
+  if (!p) fail(ctx, t('Fournisseur inconnu.'), 'bad_provider');
   const key = getKey(s.provider); ctx.key = key;
-  if (p.keyRequired && !key) fail(ctx, `Clé API manquante pour ${p.label}.`, 'missing_key');
+  if (p.keyRequired && !key) fail(ctx, t('Clé API manquante pour {p}.', { p: t(p.label) }), 'missing_key');
   let u;
-  try { u = new URL(String(s.base).trim()); } catch { fail(ctx, `URL de base invalide : « ${s.base} ».`, 'bad_url'); }
-  if (u.protocol !== 'https:' && !(u.protocol === 'http:' && LOOPBACK.includes(u.hostname))) fail(ctx, 'L’endpoint doit être en HTTPS (HTTP admis seulement en local : 127.0.0.1 ou localhost).', 'insecure_url');
+  try { u = new URL(String(s.base).trim()); } catch { fail(ctx, t('URL de base invalide : « {u} ».', { u: s.base }), 'bad_url'); }
+  if (u.protocol !== 'https:' && !(u.protocol === 'http:' && LOOPBACK.includes(u.hostname))) fail(ctx, t('L’endpoint doit être en HTTPS (HTTP admis seulement en local : 127.0.0.1 ou localhost).'), 'insecure_url');
   if (p.kind === 'azure') {
-    if (!String(s.deployment).trim()) fail(ctx, 'Nom du déploiement Azure manquant.', 'missing_deployment');
-    if (!String(s.apiVersion).trim()) fail(ctx, 'Version d’API Azure manquante.', 'missing_api_version');
-  } else if (op !== 'models' && !String(s.model).trim()) fail(ctx, 'Modèle manquant.', 'missing_model');
+    if (!String(s.deployment).trim()) fail(ctx, t('Nom du déploiement Azure manquant.'), 'missing_deployment');
+    if (!String(s.apiVersion).trim()) fail(ctx, t('Version d’API Azure manquante.'), 'missing_api_version');
+  } else if (op !== 'models' && !String(s.model).trim()) fail(ctx, t('Modèle manquant.'), 'missing_model');
   let base = (u.origin + u.pathname).replace(/\/+$/, '').replace(/\/(chat\/completions|v1\/messages)$/, '');
   if (p.kind === 'anthropic') base = base.replace(/\/v1$/, '');
   return { s, p, ctx, key, base };
@@ -65,12 +66,12 @@ async function http(ctx, url, opts) {
   try { r = await fetch(url, opts); }
   catch (e) {
     if (e.name === 'AbortError') throw e;
-    fail(ctx, `Connexion impossible à ${new URL(url).host} (réseau ou CORS : le serveur doit autoriser l’origine ${location.origin}).`, 'network');
+    fail(ctx, t('Connexion impossible à {h} (réseau ou CORS : le serveur doit autoriser l’origine {o}).', { h: new URL(url).host, o: location.origin }), 'network');
   }
   const text = await r.text();
   let j = null; try { j = JSON.parse(text); } catch {}
   if (!r.ok) fail(ctx, j?.error?.message || j?.message || (typeof j?.error === 'string' ? j.error : '') || text.slice(0, 300) || r.statusText, j?.error?.code || j?.error?.type || j?.code, r.status);
-  if (j === null) fail(ctx, 'Réponse non JSON du fournisseur : ' + text.slice(0, 120), 'bad_json', r.status);
+  if (j === null) fail(ctx, t('Réponse non JSON du fournisseur : {x}', { x: text.slice(0, 120) }), 'bad_json', r.status);
   return j;
 }
 
@@ -81,16 +82,16 @@ class LLMClient {
 
   /** Renvoie { models, fallback, reason } : liste du fournisseur, ou liste de secours si le chargement échoue. */
   async getAvailableModels() {
-    const fallback = (p, reason) => { this.#set('warn', `Liste de secours : ${reason}`); return { models: p?.models || [], fallback: true, reason }; };
+    const fallback = (p, reason) => { this.#set('warn', t('Liste de secours : {r}', { r: reason })); return { models: p?.models || [], fallback: true, reason }; };
     let c;
     try { c = config('models'); } catch (e) { if (e.code === 'not_authorized') throw e; return fallback(PROVIDERS[state.settings.provider], e.message); }
-    if (c.p.kind === 'azure') return fallback(c.p, 'Azure ne liste pas les déploiements ici : saisis le nom du déploiement.');
-    this.#set('busy', 'Chargement des modèles…');
+    if (c.p.kind === 'azure') return fallback(c.p, t('Azure ne liste pas les déploiements ici : saisis le nom du déploiement.'));
+    this.#set('busy', t('Chargement des modèles…'));
     try {
       const d = await http(c.ctx, c.p.kind === 'anthropic' ? `${c.base}/v1/models` : `${c.base}/models`, { headers: headers(c) });
       const ids = (d.data || d.models || []).map(m => m.id || m.name).filter(Boolean);
-      if (!ids.length) fail(c.ctx, 'Liste de modèles vide.', 'empty');
-      this.#set('ok', `${ids.length} modèles chargés`);
+      if (!ids.length) fail(c.ctx, t('Liste de modèles vide.'), 'empty');
+      this.#set('ok', t('{n} modèles chargés', { n: ids.length }));
       return { models: ids, fallback: false };
     } catch (e) {
       if (e.name === 'AbortError') { this.#set('idle', ''); throw e; }
@@ -108,7 +109,7 @@ class LLMClient {
 
   async #call(op, system, user, signal) {
     const c = config(op), { s, p } = c;
-    this.#set('busy', `${p.label} · ${c.ctx.model} : appel en cours…`);
+    this.#set('busy', t('{p} · {m} : appel en cours…', { p: t(p.label), m: c.ctx.model }));
     try {
       const T = +s.temperature;
       let url, body;
@@ -120,8 +121,8 @@ class LLMClient {
       }
       const d = await http(c.ctx, url, { method: 'POST', signal, headers: headers(c), body: JSON.stringify(body) });
       const text = p.kind === 'anthropic' ? (d.content || []).map(x => x.text || '').join('') : d.choices?.[0]?.message?.content;
-      if (!text || !String(text).trim()) fail(c.ctx, 'Réponse vide du fournisseur.', 'empty');
-      this.#set('ok', `${p.label} · ${c.ctx.model} : OK`);
+      if (!text || !String(text).trim()) fail(c.ctx, t('Réponse vide du fournisseur.'), 'empty');
+      this.#set('ok', `${t(p.label)} · ${c.ctx.model} : OK`);
       return text;
     } catch (e) {
       this.#set(e.name === 'AbortError' ? 'idle' : 'error', e.name === 'AbortError' ? '' : e.message);
@@ -135,7 +136,7 @@ export const llm = new LLMClient();
 export function parseJson(text) {
   const t = text.replace(/```(?:json)?/gi, '');
   const i = t.search(/[\[{]/);
-  if (i < 0) throw new Error('Aucun JSON dans la réponse');
+  if (i < 0) throw new Error(t('Aucun JSON dans la réponse'));
   const close = t[i] === '[' ? ']' : '}';
   const j = t.lastIndexOf(close);
   return JSON.parse(t.slice(i, j + 1));

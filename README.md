@@ -13,7 +13,11 @@ L'IA propose, vous validez. Tout tourne dans votre navigateur : pas de serveur, 
 ## Démarrage
 
 - **Sans serveur (fichier unique)** : ouvrir `dist/mitremapper.html` par double-clic dans un navigateur. Rien à installer. Le fichier est régénéré par `node tools/build-standalone.mjs` (outil de développement, non requis pour l'utiliser).
-- **Dossier statique** : `python -m http.server 8000` puis <http://localhost:8000> (ou n'importe quel hébergement statique : GitHub Pages, nginx…). Ouvrir `index.html` directement ne fonctionne pas, les modules JS exigent HTTP : utiliser le fichier unique dans ce cas.
+- **Dossier statique** : `python tools/serve.py` puis <http://localhost:8000> (serveur de développement sans cache : évite que le navigateur, Firefox notamment, garde d'anciens fichiers JS). `python -m http.server 8000` fonctionne aussi, mais forcer alors le rechargement (Ctrl+Shift+R) après une mise à jour. Tout hébergement statique convient (GitHub Pages, nginx…). Ouvrir `index.html` directement ne fonctionne pas, les modules JS exigent HTTP : utiliser le fichier unique dans ce cas.
+
+## Langue
+
+Le bouton **EN / FR** en haut à droite bascule toute l'interface (écrans, messages, rapport client, classeur Excel, couches Navigator) entre français et anglais ; le choix est mémorisé dans le navigateur. En anglais, l'IA rédige aussi les scénarios et justifications en anglais. Les données déjà saisies (et la démo, rédigée en français) ne sont pas traduites.
 
 ## 1. Configurer le LLM (onglet Paramètres)
 
