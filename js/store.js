@@ -61,11 +61,12 @@ export function deleteProject(pid) {
   if (pid === state.pid) { const next = listProjects()[0]; next ? openProject(next.pid) : newProject(); }
 }
 
-export function exportJson(name, data) {
+export function download(name, blob) {
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([typeof data === 'string' ? data : JSON.stringify(data, null, 2)]));
-  a.download = name; a.click(); URL.revokeObjectURL(a.href);
+  a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
+export const exportJson = (name, data) => download(name, new Blob([typeof data === 'string' ? data : JSON.stringify(data, null, 2)]));
 /** Importe un fichier projet comme NOUVEAU projet (le projet courant reste dans la bibliothèque). */
 export function importProject(text, name) {
   const d = JSON.parse(text);

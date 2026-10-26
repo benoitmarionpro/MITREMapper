@@ -81,6 +81,17 @@ t('suppression puis ajout : pas de renumérotation ni de réutilisation', state.
 state.scenarios = [{ id: 'x' }, { id: 'y' }]; save();
 t('liste remplacée → renumérotée depuis S1', state.scenarios.map(s => s.ref).join() === '1,2');
 state.scenarios = sc0;
+// --- livrables : analyse, couche Navigator, zip ---
+const { analysis } = await import('./js/coverage.js'), { layer, zip } = await import('./js/export.js');
+const sc1 = state.scenarios, ru1 = state.rules;
+state.scenarios = [{ id: 'z', ref: 1, name: 'Z', priority: 'high', techniques: ['T1059', 'T1490', 'T1003.001'] }];
+state.rules = [{ name: 'r', techniques: ['T1059.001', 'T1490'], confidence: 'high', scenarios: [] }];
+const A = analysis();
+t('analyse : 1 couvert, 1 partiel, 1 trou, 33 %', A.tot.cov === 1 && A.tot.part === 1 && A.tot.gap === 1 && A.pct === 33);
+t('couche Navigator du scénario (scores partiel 2, couvert 3, trou 1)', layer(A, state.scenarios[0]).techniques.map(x => x.score).join() === '2,3,1');
+state.scenarios = sc1; state.rules = ru1;
+const zb = new Uint8Array(await zip({ 'a.txt': 'abc' }).arrayBuffer());
+t('zip : en-tête local et fin de répertoire central', zb[0] === 0x50 && zb[1] === 0x4b && zb[2] === 3 && new DataView(zb.buffer).getUint32(zb.length - 22, true) === 0x06054b50);
 localStorage.clear(); for (const [k, v] of Object.entries(backup)) localStorage.setItem(k, v);
 const fails = (o.textContent.match(/^FAIL/gm) || []).length, oks = (o.textContent.match(/^OK/gm) || []).length;
 o.textContent += `

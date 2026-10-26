@@ -1,5 +1,6 @@
-import { state, exportJson, loadDemo, sref } from './store.js';
-import { attack, parentOf } from './attack.js';
+import { state, exportJson, download, loadDemo, sref } from './store.js';
+import { attack, parentOf, tech } from './attack.js';
+import { reportHtml, workbook, layer, layersZip } from './export.js';
 import { esc, $, showProject } from './ui.js';
 
 const RANK = { low: 1, medium: 2, high: 3 };
@@ -29,7 +30,26 @@ export function status(cm, id) {
   const subs = id.includes('.') ? [] : subsOf(id);
   return subs.length && subs.every(s => (cm.get(s)?.exact || 0) >= 2) ? 'cov' : 'part';
 }
-const LABEL = { cov: 'couvert', part: 'partiel', gap: 'trou' };
+export const LABEL = { cov: 'couvert', part: 'partiel', gap: 'trou' };
+const PRIO = { high: 0, medium: 1, low: 2 };
+/** Analyse partagée par l'écran et les exports : statuts par scénario, trous priorisés, totaux. */
+export function analysis() {
+  const cm = coverageMap();
+  const scen = state.scenarios.map(s => {
+    const st = s.techniques.map(id => [id, status(cm, id)]), c = { cov: 0, part: 0, gap: 0 };
+    st.forEach(([, k]) => c[k]++);
+    return { s, st, c, pct: s.techniques.length ? Math.round(100 * c.cov / s.techniques.length) : 0 };
+  });
+  const g = new Map();
+  for (const { s, st } of scen) for (const [id, k] of st) if (k !== 'cov') {
+    const x = g.get(id) || { id, name: tech(id)?.name || '', k, scs: [], p: 3 };
+    x.scs.push(s); x.p = Math.min(x.p, PRIO[s.priority] ?? 1); g.set(id, x);
+  }
+  const gaps = [...g.values()].sort((a, b) => a.p - b.p || (b.k === 'gap') - (a.k === 'gap') || b.scs.length - a.scs.length);
+  const uniq = new Map(scen.flatMap(x => x.st)), tot = { cov: 0, part: 0, gap: 0 };
+  uniq.forEach(k => tot[k]++);
+  return { cm, status: id => status(cm, id), scen, gaps, tot, nTech: uniq.size, pct: uniq.size ? Math.round(100 * tot.cov / uniq.size) : 0 };
+}
 const SHOW = { all: 'Toutes les techniques', scenario: 'Techniques des scénarios', gap: 'Trous uniquement', cov: 'Couvertes uniquement' };
 const view = { q: '', sc: '', show: 'all' }; // filtres conservés tant que la page est ouverte
 
@@ -39,24 +59,14 @@ export function render(root) {
   const relSet = () => new Set(state.scenarios.filter(s => !view.sc || s.id === view.sc).flatMap(s => s.techniques.map(parentOf)));
   const kind = (t, rel) => { const k = status(cm, t.id); return k === 'gap' ? (rel.has(t.id) ? 'gap' : 'none') : k; };
 
-  const total = new Set(state.scenarios.flatMap(s => s.techniques)).size;
-  const rowsHtml = state.scenarios.map(s => {
-    const st = s.techniques.map(id => [id, status(cm, id)]);
-    const c = x => st.filter(y => y[1] === x).length;
-    return `<tr><td><b class="tag sref">${sref(s)}</b> <b>${esc(s.name)}</b> <span class="tag">${esc(s.priority)}</span></td>
-      <td>${s.techniques.length ? Math.round(100 * c('cov') / s.techniques.length) : 0}% <span class="mut">(${c('cov')} couvertes, ${c('part')} partielles, ${c('gap')} trous)</span></td>
-      <td>${st.map(([id, k]) => `<span class="tag ${k}" title="${esc(attack.techniques.find(t => t.id === id)?.name)}">${id}</span>`).join('')}</td></tr>`;
-  }).join('');
-
-  const prio = { high: 0, medium: 1, low: 2 }, gaps = new Map();
-  state.scenarios.forEach(s => { for (const id of s.techniques) if (status(cm, id) !== 'cov') {
-    const g = gaps.get(id) || { scs: [], p: 3 }; g.scs.push({ ref: sref(s), name: s.name }); g.p = Math.min(g.p, prio[s.priority] ?? 1); gaps.set(id, g);
-  } });
-  const gapRows = [...gaps].sort((a, b) => a[1].p - b[1].p || b[1].scs.length - a[1].scs.length)
-    .map(([id, g]) => `<tr><td>${id} ${esc(attack.techniques.find(t => t.id === id)?.name)}</td><td class="${status(cm, id)}">${LABEL[status(cm, id)]}</td><td>${g.scs.map(x => `<div><span class="tag sref">${x.ref}</span> ${esc(x.name)}</div>`).join('')}</td></tr>`).join('');
+  const A = analysis(), total = A.nTech;
+  const rowsHtml = A.scen.map(({ s, st, c, pct }) => `<tr><td><b class="tag sref">${sref(s)}</b> <b>${esc(s.name)}</b> <span class="tag">${esc(s.priority)}</span></td>
+      <td>${pct}% <span class="mut">(${c.cov} couvertes, ${c.part} partielles, ${c.gap} trous)</span></td>
+      <td>${st.map(([id, k]) => `<span class="tag ${k}" title="${esc(tech(id)?.name)}">${id}</span>`).join('')}</td></tr>`).join('');
+  const gapRows = A.gaps.map(g => `<tr><td>${g.id} ${esc(g.name)}</td><td class="${g.k}">${LABEL[g.k]}</td><td>${g.scs.map(s => `<div><span class="tag sref">${sref(s)}</span> ${esc(s.name)}</div>`).join('')}</td></tr>`).join('');
 
   root.innerHTML = `${state.rules.length || state.scenarios.length ? '' : '<div class="card"><b>Aucune donnée.</b> Génère des scénarios et mappe des règles, ou <button id="demo" class="pri">charge la démo complète</button></div>'}
-  <div class="bar"><button id="nav">Exporter couche ATT&CK Navigator</button><button id="csv">Exporter CSV (règles)</button>
+  <div class="bar"><button id="rep" class="pri">Rapport client (PDF)</button><button id="reph">Rapport (HTML)</button><button id="xlsx">Classeur Excel</button><button id="nav">Couche Navigator</button><button id="navz">Couches Navigator par scénario (.zip)</button><button id="csv">CSV (règles)</button>
     <span class="mut">${state.rules.length} règles · ${state.scenarios.length} scénarios · ${total} techniques de scénario</span></div>
   <h2>Matrice ATT&CK</h2>
   <div class="mtools">
@@ -113,11 +123,14 @@ export function render(root) {
   drawMatrix();
   const demo = $(root, '#demo'); if (demo) demo.onclick = async () => { await loadDemo(); showProject(); render(root); };
 
-  $(root, '#nav').onclick = () => exportJson('mitremapper-layer.json', {
-    name: 'MITREMapper coverage', versions: { layer: '4.5', navigator: '5.1.0', attack: String(attack.version).split('.')[0] }, domain: 'enterprise-attack',
-    gradient: { colors: ['#e0a526', '#2f9e5b'], minValue: 1, maxValue: 3 },
-    techniques: [...cm].map(([techniqueID, e]) => ({ techniqueID, score: e.best, comment: e.rules.join('; ') })),
-  });
+  const slug = state.name.normalize('NFD').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'projet';
+  const html = () => new Blob([reportHtml(analysis())], { type: 'text/html' });
+  $(root, '#rep').onclick = () => { const w = window.open(URL.createObjectURL(html())); if (!w) alert('Fenêtre bloquée : autorise les pop-ups ou utilise « Rapport (HTML) ».'); };
+  $(root, '#reph').onclick = () => download(`mitremapper-rapport-${slug}.html`, html());
+  $(root, '#xlsx').onclick = () => download(`mitremapper-${slug}.xlsx`, workbook(analysis()));
+  // couche du scénario sélectionné dans le filtre, sinon couche globale
+  $(root, '#nav').onclick = () => { const s = state.scenarios.find(x => x.id === view.sc); exportJson(`mitremapper-layer-${s ? sref(s) : 'global'}.json`, layer(analysis(), s)); };
+  $(root, '#navz').onclick = () => download(`mitremapper-layers-${slug}.zip`, layersZip(analysis()));
   $(root, '#csv').onclick = () => {
     const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`, sc = id => state.scenarios.find(s => s.id === id)?.name;
     exportJson('mitremapper-rules.csv', ['règle,source,techniques,scénarios,étape,confiance,note',

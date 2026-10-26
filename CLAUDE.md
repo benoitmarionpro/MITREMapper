@@ -25,6 +25,7 @@ Le LLM fait le gros du travail ; l'utilisateur relit et corrige. Les IDs ATT&CK 
 | `js/keys.js` | Clés API (session / mémorisées, par fournisseur) et autorisation d'usage de l'IA |
 | `js/attack.js` | Chargement et validation des IDs, catalogue pour les prompts |
 | `js/scenarios.js`, `js/mapping.js`, `js/coverage.js` | Un module par écran : prompts + rendu + édition |
+| `js/export.js` | Livrables : `reportHtml(A)` (rapport imprimable), `workbook(A)` (.xlsx écrit à la main), `layer(A, s?)` / `layersZip(A)` (Navigator), `zip()` (zip « stocké » + CRC32), `reco()` ; `A = analysis()` de `coverage.js` (ne pas importer `coverage.js` depuis `export.js` : cycle interdit par le mini-bundler) |
 | `js/settings.js` | Configuration LLM, étapes de stratégie, import/export projet |
 | `js/ui.js` | Helpers (`esc`, `run` avec annulation, lecture de fichiers) |
 | `data/attack.json` | Référentiel ATT&CK Enterprise compact, **généré** |

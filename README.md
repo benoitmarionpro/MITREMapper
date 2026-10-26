@@ -69,7 +69,11 @@ La **revue du mapping** est une matrice règles × scénarios (S1…Sn, nom au s
 - **Statuts** : *couvert* = règle de confiance ≥ medium sur la technique elle-même, ou toutes ses sous-techniques couvertes ; *partiel* = seulement certaines sous-techniques couvertes (le volet de détail indique « n/N couvertes »), confiance basse, ou pour une sous-technique seule sa parente est couverte ; *trou* = aucune règle.
 - **Couverture par scénario** : pourcentage de techniques couvertes, partielles et en trou.
 - **Trous priorisés** par priorité de scénario.
-- **Exports** : couche ATT&CK Navigator (JSON), CSV des règles.
+- **Livrables** :
+  - **Rapport client (PDF)** : ouvre un rapport aux couleurs Wavestone dans un nouvel onglet, à imprimer en PDF (bouton « Imprimer / PDF ») ; **Rapport (HTML)** le télécharge. Contenu : synthèse chiffrée, couverture par scénario, trous prioritaires avec recommandation, matrice ATT&CK (page paysage), inventaire des règles, méthode et limites.
+  - **Classeur Excel** (.xlsx, généré localement) : onglets Synthèse, Scénarios, Trous (avec recommandations), Règles, Techniques.
+  - **Couche Navigator** : couche globale, ou celle du scénario sélectionné dans le filtre (3 couvert, 2 partiel, 1 trou) ; **Couches Navigator par scénario (.zip)** : la couche globale et une couche par scénario.
+  - **CSV** des règles.
 
 ## Projets et sauvegarde
 
