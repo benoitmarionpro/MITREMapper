@@ -3,7 +3,7 @@
 // Mini-bundler sans dépendance : chaque module devient une fonction, les import/export sont réécrits.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 const root = new URL('../', import.meta.url);
-const read = p => readFileSync(new URL(p, root), 'utf8');
+const read = p => readFileSync(new URL(p, root), 'utf8').replace(/\r\n/g, '\n'); // LF partout : sortie identique sous Windows et Linux (CI)
 
 const order = [], seen = new Set(), src = {};
 function visit(name) {
