@@ -1,5 +1,10 @@
 /* Charte Wavestone : tokens repris de l'outil Mythos Readiness Assessment */
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+/* Polices embarquées (SIL OFL 1.1, voir fonts/) : aucune requête externe, fonctionne hors ligne */
+@font-face{font-family:'Inter';font-style:normal;font-weight:400 700;font-display:swap;src:url('../fonts/inter-latin.woff2') format('woff2')}
+@font-face{font-family:'Poppins';font-style:normal;font-weight:400;font-display:swap;src:url('../fonts/poppins-400-latin.woff2') format('woff2')}
+@font-face{font-family:'Poppins';font-style:normal;font-weight:500;font-display:swap;src:url('../fonts/poppins-500-latin.woff2') format('woff2')}
+@font-face{font-family:'Poppins';font-style:normal;font-weight:600;font-display:swap;src:url('../fonts/poppins-600-latin.woff2') format('woff2')}
+@font-face{font-family:'Poppins';font-style:normal;font-weight:700;font-display:swap;src:url('../fonts/poppins-700-latin.woff2') format('woff2')}
 :root{
   --indigo-50:#F1EEFB;--indigo-600:#451DC7;--indigo-700:#36169B;--indigo-800:#2D1380;
   --green-50:#E1FDED;--green-300:#5CF59E;--green-400:#04F06A;--green-700:#088A42;--teal:#228D95;
@@ -17,7 +22,8 @@ a{color:var(--acc)}
 header{background:var(--brand);color:#fff;position:sticky;top:0;z-index:10;box-shadow:0 1px 4px rgba(0,0,0,.2);display:flex;align-items:center;gap:1rem;padding:0 2rem;height:56px}
 h1{font-size:15px;font-weight:600;margin:0;white-space:nowrap}
 h1 small{font-weight:400;font-size:12px;color:rgba(255,255,255,.55);margin-left:.5rem}
-#ver{margin-left:auto;font-size:12px;color:rgba(255,255,255,.55);white-space:nowrap}
+#proj{margin-left:auto;font-size:12.5px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:22rem}
+#ver{margin-left:1rem;font-size:12px;color:rgba(255,255,255,.55);white-space:nowrap}
 nav{display:flex;gap:4px;padding:0 .5rem;overflow-x:auto}
 nav button{border:0;background:transparent;color:rgba(255,255,255,.65);padding:6px 14px;border-radius:999px;font:500 12.5px Inter,sans-serif;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s}
 nav button:hover{background:rgba(255,255,255,.1);color:#fff}

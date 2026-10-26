@@ -31,16 +31,20 @@ Le LLM fait le gros du travail ; l'utilisateur relit et corrige. Les IDs ATT&CK 
 | `tools/build-attack.mjs` | Régénère `data/attack.json` depuis le STIX officiel (`node tools/build-attack.mjs`) |
 | `tools/build-standalone.mjs` | Génère `dist/mitremapper.html`, fichier unique sans serveur (mini-bundler : un module = une fonction ; ne pas utiliser de `export` hors `export const/let/function/class NOM` en début de ligne ni de live binding, ex. `attack` est un objet partagé) |
 | `data/sample/` | CTI, règles Sigma et `project.json` (démo complète déjà mappée, chargée par `loadDemo()` dans `store.js`) |
-| `test.html` | Asserts minimaux (parse JSON, validation d'IDs) : ouvrir via le serveur local |
+| `test.html` | Tests (parse JSON, IDs, tags, liens, CYBAIMaker, couverture, références) : ouvrir via le serveur local ; met `document.title` à `PASS n` / `FAIL n` ; sauvegarde et restaure le localStorage |
+| `.github/workflows/ci.yml` | CI : `node --check`, `dist/` à jour, `test.html` dans Chrome headless |
+| `fonts/` | Inter et Poppins (woff2, SIL OFL 1.1), inlinées en data URI dans `dist/` |
 
 ## Modèle de données
-`{client, cti, scenarios[{id,name,priority,techniques[],summary,actors}], rules[{id,name,source,body,techniques[],scenarios[ids],why{scenarioId:phrase},reviewed,tags[],by:'tags'|'ia',tagDiff{tags[],ia[]}|null,stage,confidence,note,mapped}], settings}`
+`{pid, name, nextRef, client, cti, scenarios[{id,ref,name,priority,techniques[],summary,actors}], rules[{id,name,source,body,techniques[],scenarios[ids],why{scenarioId:phrase},reviewed,tags[],by:'tags'|'ia',tagDiff{tags[],ia[]}|null,stage,confidence,note,mapped}], settings}`
+
+Projets (`store.js`) : projet courant + réglages dans `mitremapper.v1` ; bibliothèque dans `mitremapper.lib` (index) et `mitremapper.lib.<pid>` (données sans réglages), synchronisée à chaque `save()`. `state` est un objet unique jamais réassigné (`loadInto` le vide puis le remplit). Références de scénarios stables : `s.ref` attribué par `save()` (`nextRef`, jamais réutilisé ; renumérotation depuis S1 si aucun scénario n'a de ref) ; toujours afficher via `sref(s)`, jamais par l'index.
 
 Revue du mapping (`mapping.js`) : `linkState(règle, scénario)` → `ok` (lié, technique commune au niveau parent), `suspect` (lié sans technique commune), `miss` (non lié mais technique commune). `why` et `reviewed` sont optionnels (projets anciens compatibles).
 
 Mapping déterministe d'abord (`mapping.js`) : `extractTechniques(body)` lit les IDs ATT&CK déclarés (tags Sigma, champs MITRE des exports) et les valide ; une règle taguée est mappée sans IA (`by: 'tags'`, scénarios liés par technique commune). L'IA ne traite que les règles sans tag, ou toutes si l'option de vérification est cochée (`tagDiff` = écart au niveau technique parente entre tags et lecture IA).
 
-Règle de couverture (`coverage.js`) : une technique de scénario est *couverte* si une règle de confiance ≥ medium la cite ou cite l'une de ses sous-techniques, *partielle* si seule une règle `low` la couvre ou si seule sa technique parente est couverte, sinon *trou*. Une règle sur une sous-technique compte aussi pour sa parente dans la matrice.
+Règle de couverture (`coverage.js`, `status(coverageMap(), id)`) : *couverte* si une règle de confiance ≥ medium cite la technique elle-même, ou si toutes ses sous-techniques sont couvertes ; *partielle* si seulement certaines sous-techniques, confiance `low`, ou (sous-technique) seule la parente est couverte ; sinon *trou*.
 
 ## Conventions
 - Interface et prompts en français. Les noms de techniques restent ceux de MITRE.

@@ -1,4 +1,4 @@
-import { state, save, uid, sample } from './store.js';
+import { state, save, uid, sample, sref } from './store.js';
 import { chatJson } from './llm.js';
 import { attack, tech, validate, parentOf, promptCatalog } from './attack.js';
 import { esc, $, readFiles, run } from './ui.js';
@@ -10,7 +10,7 @@ Réponds en JSON : {"results":[{"i":0,"techniques":["T1059.001"],"scenarios":[{"
 - stage = une valeur parmi : ${stages.join(' | ')}
 - scenarios = scénarios ci-dessous (S1, S2…) dont la règle détecte réellement une étape ; sois sélectif, [] si aucun. why = une phrase qui dit quelle étape du scénario la règle détecte.
 - confidence : high = détection directe et robuste ; medium = partielle/contournable ; low = indirecte ou très bruitée.
-Scénarios :\n${scenarios.map((s, k) => `S${k + 1} ${s.name} [${s.techniques.join(',')}]`).join('\n') || '(aucun)'}
+Scénarios :\n${scenarios.map(s => `${sref(s)} ${s.name} [${s.techniques.join(',')}]`).join('\n') || '(aucun)'}
 Techniques parentes de référence :\n${promptCatalog()}`;
 
 /** IDs ATT&CK déclarés dans la règle, sans IA : tags Sigma (attack.t1059.001), champs MITRE des exports Sentinel/Splunk/Elastic (T1059…). Validés contre le référentiel. */
@@ -60,7 +60,7 @@ const flags = r => {
 const FILTERS = { all: 'Toutes', todo: 'À relire', suspect: 'Suspects', miss: 'Oublis possibles', none: 'Sans scénario', wide: 'Trop larges', low: 'Confiance basse', diff: 'Écart tags / IA' };
 const SYM = { ok: '●', suspect: '⚠', miss: '◌', '': '·' };
 const view = { q: '', f: 'all', hl: '', sel: null }; // état d'affichage conservé tant que la page est ouverte
-const scId = (ref, sc) => sc[+String(ref).replace(/\D/g, '') - 1]?.id;
+const scId = (ref, sc) => sc.find(s => s.ref === +String(ref).replace(/\D/g, ''))?.id;
 
 export function render(root) {
   root.innerHTML = `
@@ -88,7 +88,7 @@ export function render(root) {
     $(root, '#n').textContent = state.rules.length;
     $(root, '#prog').textContent = `${state.rules.filter(r => r.reviewed).length}/${state.rules.length} validées`;
     $(root, '#flt').innerHTML = Object.entries(FILTERS).map(([f, l]) => `<button class="lg flt ${view.f === f ? 'on' : ''}" data-f="${f}">${l} ${f === 'all' ? state.rules.length : state.rules.filter(r => flags(r)[f]).length}</button>`).join('');
-    $(root, '#head').innerHTML = `<tr><th></th><th>Règle</th><th>Techniques</th>${S.map((s, k) => `<th class="sc ${view.hl === s.id ? 'hl' : ''}" data-hl="${s.id}" title="${esc(s.name)} (${esc(s.priority)}) : trier par ce scénario"><span class="tag sref">S${k + 1}</span></th>`).join('')}</tr>`;
+    $(root, '#head').innerHTML = `<tr><th></th><th>Règle</th><th>Techniques</th>${S.map(s => `<th class="sc ${view.hl === s.id ? 'hl' : ''}" data-hl="${s.id}" title="${esc(s.name)} (${esc(s.priority)}) : trier par ce scénario"><span class="tag sref">${sref(s)}</span></th>`).join('')}</tr>`;
     const list = state.rules.filter(r => (view.f === 'all' || flags(r)[view.f])
       && (!q || (r.name + ' ' + r.source + ' ' + r.techniques.map(t => t + ' ' + (tech(t)?.name || '')).join(' ')).toLowerCase().includes(q)));
     if (view.hl) list.sort((a, b) => b.scenarios.includes(view.hl) - a.scenarios.includes(view.hl));
@@ -108,17 +108,17 @@ export function render(root) {
   function detail() {
     const r = rule(view.sel), d = $(root, '#detail');
     if (!r) { d.classList.remove('open'); return; }
-    const S = sc(), idx = s => S.indexOf(s) + 1;
+    const S = sc();
     const lnk = S.filter(s => r.scenarios.includes(s.id)), miss = S.filter(s => linkState(r, s) === 'miss');
     d.innerHTML = `<button class="x" aria-label="Fermer">×</button><h3>${esc(r.name)}</h3>
       <p class="mut">${esc(r.source)} · <label style="display:inline;margin:0"><input type="checkbox" data-d="rev" ${r.reviewed ? 'checked' : ''} style="width:auto"> Validée</label></p>
       <h4>Règle</h4><pre>${esc(r.body)}</pre>
       ${r.note ? `<h4>Note du LLM</h4><p>${esc(r.note)}</p>` : ''}
-      <h4>Scénarios liés (${lnk.length})</h4>${lnk.map(s => `<div class="item"><span class="tag sref">S${idx(s)}</span> <b>${esc(s.name)}</b> <span class="tag">${esc(s.priority)}</span>
+      <h4>Scénarios liés (${lnk.length})</h4>${lnk.map(s => `<div class="item"><span class="tag sref">${sref(s)}</span> <b>${esc(s.name)}</b> <span class="tag">${esc(s.priority)}</span>
         ${linkState(r, s) === 'suspect' ? '<span class="tag gap">⚠ aucune technique commune</span>' : ''}
         <div class="mut">${esc(r.why?.[s.id] || 'Pas de justification (remapper pour en obtenir une).')}</div>
         <div>${chips(common(r, s))}</div><button data-unlink="${s.id}">Délier</button></div>`).join('') || '<p class="mut">Aucun scénario lié.</p>'}
-      <h4>Oublis possibles (${miss.length})</h4>${miss.map(s => `<div class="item"><span class="tag sref">S${idx(s)}</span> ${esc(s.name)}<div>${chips(common(r, s))}</div><button data-link="${s.id}">Lier</button></div>`).join('') || '<p class="mut">Aucun.</p>'}
+      <h4>Oublis possibles (${miss.length})</h4>${miss.map(s => `<div class="item"><span class="tag sref">${sref(s)}</span> ${esc(s.name)}<div>${chips(common(r, s))}</div><button data-link="${s.id}">Lier</button></div>`).join('') || '<p class="mut">Aucun.</p>'}
       <h4>Techniques</h4><div>${chips(r.techniques, true) || '<span class="mut">Aucune.</span>'}</div>
       ${tagsOf(r).length ? `<p class="mut">Tags déclarés dans la règle : ${chips(tagsOf(r))}</p>` : ''}
       ${r.tagDiff ? `<div class="item"><span class="tag gap">Écart tags / IA</span> ${r.tagDiff.tags.length ? `tags seuls : ${chips(r.tagDiff.tags)}` : ''} ${r.tagDiff.ia.length ? `IA seule : ${chips(r.tagDiff.ia)}` : ''}<div><button data-usetags>Utiliser les tags</button></div></div>` : ''}

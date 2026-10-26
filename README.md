@@ -66,23 +66,32 @@ La **revue du mapping** est une matrice règles × scénarios (S1…Sn, nom au s
 ## 4. Couverture
 
 - **Matrice ATT&CK** : vert = couvert, ambre = partiel, rouge = trou (technique d'un scénario sans règle), barre colorée à gauche = technique présente dans un scénario, ×n = nombre de règles. Les en-têtes de tactiques restent visibles au défilement et affichent « couvertes/total » pour les scénarios. Recherche par ID ou nom, filtre par scénario, filtre par statut (techniques des scénarios, trous, couvertes). Un clic sur une technique ouvre un volet avec ses règles, ses scénarios et ses sous-techniques ; Échap le ferme.
-- **Couverture par scénario** : couvert (règle de confiance ≥ medium sur la technique ou l'une de ses sous-techniques), partiel (confiance faible, ou seule la technique parente est couverte), trou.
+- **Statuts** : *couvert* = règle de confiance ≥ medium sur la technique elle-même, ou toutes ses sous-techniques couvertes ; *partiel* = seulement certaines sous-techniques couvertes (le volet de détail indique « n/N couvertes »), confiance basse, ou pour une sous-technique seule sa parente est couverte ; *trou* = aucune règle.
+- **Couverture par scénario** : pourcentage de techniques couvertes, partielles et en trou.
 - **Trous priorisés** par priorité de scénario.
 - **Exports** : couche ATT&CK Navigator (JSON), CSV des règles.
 
-## Sauvegarde
+## Projets et sauvegarde
 
-Le projet est enregistré automatiquement dans le navigateur. Paramètres → **Exporter le projet** pour une sauvegarde JSON (sans la clé API), **Importer** pour la restaurer.
+Paramètres → **Projets** : plusieurs projets (un par client ou mission) dans le même navigateur, enregistrés automatiquement. Renommer, ouvrir, créer, supprimer, vider ; le nom du projet courant est affiché dans l'en-tête. **Exporter le projet** produit une sauvegarde JSON (sans clé API) ; **Importer** l'ouvre comme nouveau projet, sans écraser le projet courant.
+
+Les scénarios gardent une référence stable (S1, S2…) : supprimer S2 ne renumérote pas les suivants, et un nouveau scénario prend le numéro suivant.
 
 ## Essayer
 
 Pour une démo rapide :
 
-- **Paramètres → Charger la démo complète (sans LLM)**, ou le bouton équivalent sur l'écran Couverture vide : 11 scénarios et 7 règles déjà mappés, la matrice s'affiche immédiatement. Remplace les scénarios et règles en cours ; vos réglages LLM sont conservés.
+- **Paramètres → Ouvrir la démo complète (sans LLM)**, ou le bouton équivalent sur l'écran Couverture vide : nouveau projet avec 11 scénarios et 7 règles déjà mappés, la matrice s'affiche immédiatement. Vos autres projets et vos réglages LLM sont conservés.
 - **Scénarios → Charger l'exemple** : remplit le profil client et le rapport CTI d'exemple ; il reste à cliquer sur Générer.
 - **Règles → Charger les règles d'exemple** : ajoute 7 règles Sigma (5 avec tags ATT&CK, mappées sans IA ; 2 sans tag, pour l'IA) ; il reste à cliquer sur Mapper.
 
 Les fichiers sont dans `data/sample/` (`cti.txt`, `rules.yml`, `project.json`).
+
+## Développement
+
+- `node tools/build-standalone.mjs` régénère `dist/mitremapper.html` (à committer après toute modification).
+- `test.html` (servi en HTTP) exécute les tests ; la CI GitHub Actions (`.github/workflows/ci.yml`) vérifie à chaque push la syntaxe, que `dist/` est à jour et que `test.html` passe dans Chrome headless.
+- Polices Inter et Poppins embarquées dans `fonts/` (licence SIL OFL 1.1) : aucune requête externe, fonctionne hors ligne.
 
 ## Mettre à jour le référentiel ATT&CK
 

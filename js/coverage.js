@@ -1,22 +1,33 @@
-import { state, exportJson, loadDemo } from './store.js';
+import { state, exportJson, loadDemo, sref } from './store.js';
 import { attack, parentOf } from './attack.js';
-import { esc, $ } from './ui.js';
+import { esc, $, showProject } from './ui.js';
 
 const RANK = { low: 1, medium: 2, high: 3 };
-/** id -> {n, best, rules[], items[]} ; une règle sur une sous-technique compte aussi pour la parente. */
-function coverageMap() {
+/** id -> {n, best, exact, rules[], items[]} : une règle sur une sous-technique compte aussi pour la parente ;
+ *  exact = meilleure confiance des règles qui citent la technique elle-même. */
+export function coverageMap(rules = state.rules) {
   const m = new Map();
-  for (const r of state.rules) for (const t of r.techniques) for (const id of new Set([t, parentOf(t)])) {
-    const e = m.get(id) || { n: 0, best: 0, rules: [], items: [] };
-    e.n++; e.best = Math.max(e.best, RANK[r.confidence] || 2); e.rules.push(r.name); e.items.push(r); m.set(id, e);
+  for (const r of rules) {
+    const c = RANK[r.confidence] || 2, ids = new Map(); // id -> cité exactement par la règle ?
+    for (const t of r.techniques) { ids.set(t, true); if (!ids.has(parentOf(t))) ids.set(parentOf(t), false); }
+    for (const [id, exact] of ids) {
+      const e = m.get(id) || { n: 0, best: 0, exact: 0, rules: [], items: [] };
+      e.n++; e.best = Math.max(e.best, c); if (exact) e.exact = Math.max(e.exact, c); e.rules.push(r.name); e.items.push(r); m.set(id, e);
+    }
   }
   return m;
 }
-/** Statut d'une technique de scénario : cov (règle medium+ sur elle ou l'une de ses sous-techniques), part (confiance low, ou seule la technique parente est couverte), gap. */
-function status(cm, id) {
+const subsOf = id => attack.techniques.filter(t => t.id.startsWith(id + '.')).map(t => t.id);
+/** Statut d'une technique :
+ *  cov  = règle medium+ sur la technique elle-même, ou toutes ses sous-techniques couvertes (medium+) ;
+ *  part = seulement certaines sous-techniques, confiance basse, ou (pour une sous-technique) seule la parente est couverte ;
+ *  gap  = aucune règle. */
+export function status(cm, id) {
   const e = cm.get(id);
-  if (e) return e.best >= 2 ? 'cov' : 'part';
-  return id.includes('.') && state.rules.some(r => r.techniques.includes(parentOf(id))) ? 'part' : 'gap';
+  if (!e) return id.includes('.') && cm.get(parentOf(id))?.exact ? 'part' : 'gap';
+  if (e.exact >= 2) return 'cov';
+  const subs = id.includes('.') ? [] : subsOf(id);
+  return subs.length && subs.every(s => (cm.get(s)?.exact || 0) >= 2) ? 'cov' : 'part';
 }
 const LABEL = { cov: 'couvert', part: 'partiel', gap: 'trou' };
 const SHOW = { all: 'Toutes les techniques', scenario: 'Techniques des scénarios', gap: 'Trous uniquement', cov: 'Couvertes uniquement' };
@@ -26,20 +37,20 @@ export function render(root) {
   const cm = coverageMap();
   const parents = attack.techniques.filter(t => !t.id.includes('.'));
   const relSet = () => new Set(state.scenarios.filter(s => !view.sc || s.id === view.sc).flatMap(s => s.techniques.map(parentOf)));
-  const kind = (t, rel) => { const e = cm.get(t.id); return e ? (e.best >= 2 ? 'cov' : 'part') : rel.has(t.id) ? 'gap' : 'none'; };
+  const kind = (t, rel) => { const k = status(cm, t.id); return k === 'gap' ? (rel.has(t.id) ? 'gap' : 'none') : k; };
 
   const total = new Set(state.scenarios.flatMap(s => s.techniques)).size;
-  const rowsHtml = state.scenarios.map((s, k) => {
+  const rowsHtml = state.scenarios.map(s => {
     const st = s.techniques.map(id => [id, status(cm, id)]);
     const c = x => st.filter(y => y[1] === x).length;
-    return `<tr><td><b class="tag sref">S${k + 1}</b> <b>${esc(s.name)}</b> <span class="tag">${esc(s.priority)}</span></td>
+    return `<tr><td><b class="tag sref">${sref(s)}</b> <b>${esc(s.name)}</b> <span class="tag">${esc(s.priority)}</span></td>
       <td>${s.techniques.length ? Math.round(100 * c('cov') / s.techniques.length) : 0}% <span class="mut">(${c('cov')} couvertes, ${c('part')} partielles, ${c('gap')} trous)</span></td>
       <td>${st.map(([id, k]) => `<span class="tag ${k}" title="${esc(attack.techniques.find(t => t.id === id)?.name)}">${id}</span>`).join('')}</td></tr>`;
   }).join('');
 
   const prio = { high: 0, medium: 1, low: 2 }, gaps = new Map();
-  state.scenarios.forEach((s, k) => { for (const id of s.techniques) if (status(cm, id) !== 'cov') {
-    const g = gaps.get(id) || { scs: [], p: 3 }; g.scs.push({ ref: `S${k + 1}`, name: s.name }); g.p = Math.min(g.p, prio[s.priority] ?? 1); gaps.set(id, g);
+  state.scenarios.forEach(s => { for (const id of s.techniques) if (status(cm, id) !== 'cov') {
+    const g = gaps.get(id) || { scs: [], p: 3 }; g.scs.push({ ref: sref(s), name: s.name }); g.p = Math.min(g.p, prio[s.priority] ?? 1); gaps.set(id, g);
   } });
   const gapRows = [...gaps].sort((a, b) => a[1].p - b[1].p || b[1].scs.length - a[1].scs.length)
     .map(([id, g]) => `<tr><td>${id} ${esc(attack.techniques.find(t => t.id === id)?.name)}</td><td class="${status(cm, id)}">${LABEL[status(cm, id)]}</td><td>${g.scs.map(x => `<div><span class="tag sref">${x.ref}</span> ${esc(x.name)}</div>`).join('')}</td></tr>`).join('');
@@ -88,7 +99,7 @@ export function render(root) {
     const d = $(root, '#detail');
     d.innerHTML = `<button class="x" aria-label="Fermer">×</button><h3>${id} ${esc(t.name)}</h3>
       <p><span class="tag ${st[0]}">${st[1]}</span> <a href="https://attack.mitre.org/techniques/${id}/" target="_blank" rel="noopener">Fiche MITRE</a></p>
-      <h4>Règles (${e ? e.items.length : 0})</h4>${rules}<h4>Scénarios (${scs.length})</h4>${scn}<h4>Sous-techniques (${subs.length})</h4>${sub}`;
+      <h4>Règles (${e ? e.items.length : 0})</h4>${rules}<h4>Scénarios (${scs.length})</h4>${scn}<h4>Sous-techniques (${subs.filter(x => (cm.get(x.id)?.exact || 0) >= 2).length}/${subs.length} couvertes)</h4>${sub}`;
     d.classList.add('open'); $(d, '.x').focus();
   }
 
@@ -100,7 +111,7 @@ export function render(root) {
   $(root, '#detail').onclick = e => { if (e.target.classList.contains('x')) e.currentTarget.classList.remove('open'); };
   root.onkeydown = e => { if (e.key === 'Escape') $(root, '#detail').classList.remove('open'); };
   drawMatrix();
-  const demo = $(root, '#demo'); if (demo) demo.onclick = async () => { await loadDemo(); render(root); };
+  const demo = $(root, '#demo'); if (demo) demo.onclick = async () => { await loadDemo(); showProject(); render(root); };
 
   $(root, '#nav').onclick = () => exportJson('mitremapper-layer.json', {
     name: 'MITREMapper coverage', versions: { layer: '4.5', navigator: '5.1.0', attack: String(attack.version).split('.')[0] }, domain: 'enterprise-attack',

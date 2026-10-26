@@ -1,4 +1,5 @@
 import { loadAttack, attack } from './attack.js';
+import { showProject } from './ui.js';
 import * as settings from './settings.js';
 import * as scenarios from './scenarios.js';
 import * as mapping from './mapping.js';
@@ -7,7 +8,7 @@ const views = { Scénarios: scenarios, Règles: mapping, Couverture: coverage, P
 const tabs = document.getElementById('tabs'), view = document.getElementById('view');
 function show(name) {
   [...tabs.children].forEach(b => b.classList.toggle('on', b.textContent === name));
-  view.replaceChildren(); views[name].render(view);
+  view.replaceChildren(); views[name].render(view); showProject();
   location.hash = name;
 }
 for (const n of Object.keys(views)) {

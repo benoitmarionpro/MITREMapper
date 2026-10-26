@@ -1,11 +1,20 @@
-import { state, save, exportJson, importProject, projectForExport, loadDemo } from './store.js';
+import { state, save, exportJson, importProject, projectForExport, loadDemo, listProjects, openProject, newProject, deleteProject } from './store.js';
 import { PROVIDERS, llm } from './llm.js';
 import { getKey, setKey, clearKeys, isRemembered, mask, isAuthorized, setAuthorized } from './keys.js';
-import { esc, $ } from './ui.js';
+import { esc, $, showProject } from './ui.js';
 
 export function render(root) {
   const s = state.settings;
   root.innerHTML = `
+  <h2>Projets</h2>
+  <div class="row">
+    <div><label for="pname">Nom du projet courant</label><input id="pname"></div>
+    <div><label for="plist">Ouvrir un projet</label><select id="plist">${listProjects().map(p => `<option value="${p.pid}" ${p.pid === state.pid ? 'selected' : ''}>${esc(p.name)} (${new Date(p.updated).toLocaleDateString('fr-FR')})</option>`).join('')}</select></div>
+  </div>
+  <div class="bar"><button id="pnew">Nouveau projet</button><button id="pdel">Supprimer le projet courant</button><button id="reset">Vider le projet courant</button>
+    <button id="exp">Exporter le projet (JSON)</button><label style="margin:0">Importer comme nouveau projet <input id="imp" type="file" accept=".json" style="width:auto"></label></div>
+  <div class="bar"><button id="demo" class="pri">Ouvrir la démo complète (sans LLM)</button><span class="mut">Nouveau projet avec scénarios et règles d'exemple déjà mappés : prêt pour la matrice en un clic.</span></div>
+  <p class="mut">Les projets sont enregistrés dans ce navigateur ; exporter en JSON pour les sauvegarder ou les partager (les clés API ne sont jamais exportées).</p>
   <h2>Utilisation de l'IA</h2>
   <label class="chk"><input type="checkbox" id="auth"> I confirm that AI use is authorized for this content and complies with the client's rules.</label>
   <p class="mut">Je confirme que l'usage de l'IA est autorisé pour ce contenu et conforme aux règles du client. Aucun appel IA (génération, mapping, liste des modèles, test) n'est envoyé tant que cette case n'est pas cochée ; elle est à reconfirmer à chaque session.</p>
@@ -26,9 +35,7 @@ export function render(root) {
   <p id="st" class="mut"></p>
   <h2>Stratégie de détection</h2>
   <label for="stages">Étapes (une par ligne)</label><textarea id="stages" style="min-height:5rem"></textarea>
-  <h2>Projet</h2>
-  <div class="bar"><button id="exp">Exporter le projet (JSON)</button><label style="margin:0">Importer <input id="imp" type="file" accept=".json" style="width:auto"></label><button id="reset">Tout effacer</button></div>
-  <div class="bar"><button id="demo" class="pri">Charger la démo complète (sans LLM)</button><span class="mut">Scénarios et règles d'exemple déjà mappés : prêt pour la matrice en un clic.</span></div>`;
+`;
 
   const f = { base: 'base', model: 'model', dep: 'deployment', apiv: 'apiVersion', temp: 'temperature', batch: 'batch' };
   const st = $(root, '#st'), pill = $(root, '#pill');
@@ -80,11 +87,18 @@ export function render(root) {
     try { st.textContent = 'Connexion OK : ' + await llm.testConnection(); } catch (e) { st.textContent = e.message; }
     showStatus();
   };
-  $(root, '#exp').onclick = () => exportJson('mitremapper-projet.json', projectForExport());
-  $(root, '#imp').onchange = async e => { try { importProject(await e.target.files[0].text()); alert('Projet importé'); } catch (x) { alert(x.message); } };
-  $(root, '#demo').onclick = async () => {
-    if ((state.scenarios.length || state.rules.length) && !confirm('Remplacer les scénarios et règles actuels par la démo ?')) return;
-    try { await loadDemo(); alert('Démo chargée : voir Scénarios, Règles et Couverture.'); } catch (x) { alert(x.message); }
+  const reload = () => { showProject(); render(root); };
+  $(root, '#pname').value = state.name;
+  $(root, '#pname').onchange = e => { state.name = e.target.value.trim() || 'Projet sans nom'; save(); reload(); };
+  $(root, '#plist').onchange = e => { try { openProject(e.target.value); } catch (x) { alert(x.message); } reload(); };
+  $(root, '#pnew').onclick = () => { const n = prompt('Nom du nouveau projet', 'Nouveau projet'); if (n !== null) { newProject(n.trim()); reload(); } };
+  $(root, '#pdel').onclick = () => { if (confirm(`Supprimer définitivement le projet « ${state.name} » de ce navigateur ?`)) { deleteProject(state.pid); reload(); } };
+  const slug = state.name.normalize('NFD').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'projet';
+  $(root, '#exp').onclick = () => exportJson(`mitremapper-${slug}.json`, projectForExport());
+  $(root, '#imp').onchange = async e => {
+    const f = e.target.files[0];
+    try { importProject(await f.text(), f.name.replace(/\.json$/i, '')); reload(); } catch (x) { alert(x.message); }
   };
-  $(root, '#reset').onclick = () => { if (confirm('Effacer scénarios, règles et CTI ?')) { state.scenarios = []; state.rules = []; state.cti = ''; save(); } };
+  $(root, '#demo').onclick = async () => { try { await loadDemo(); reload(); } catch (x) { alert(x.message); } };
+  $(root, '#reset').onclick = () => { if (confirm(`Vider le projet « ${state.name} » (scénarios, règles, CTI) ?`)) { state.scenarios = []; state.rules = []; state.cti = ''; save(); } };
 }

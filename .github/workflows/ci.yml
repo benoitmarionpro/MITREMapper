@@ -1,0 +1,24 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntaxe JavaScript
+        run: for f in js/*.js tools/*.mjs; do node --check "$f"; done
+      - name: dist/mitremapper.html à jour
+        run: |
+          node tools/build-standalone.mjs
+          git diff --exit-code -- dist/ || (echo "::error::dist/mitremapper.html n'est pas à jour : lancer node tools/build-standalone.mjs et committer" && exit 1)
+      - name: Tests navigateur (test.html)
+        run: |
+          python3 -m http.server 8000 >/dev/null 2>&1 &
+          sleep 2
+          google-chrome --headless=new --no-sandbox --disable-gpu --virtual-time-budget=20000 --dump-dom http://localhost:8000/test.html > out.html
+          grep -o '<title>[^<]*' out.html
+          grep -o '^[A-Z][A-Z ]*  .*' out.html | grep -v '^OK' || true
+          grep -q '<title>PASS' out.html

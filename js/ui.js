@@ -1,4 +1,7 @@
 import { isAuthorized } from './keys.js';
+import { state } from './store.js';
+/** Affiche le nom du projet courant dans l'en-tête. */
+export const showProject = () => { const e = document.getElementById('proj'); if (e) e.textContent = state.name; };
 export const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 export const $ = (root, sel) => root.querySelector(sel);
 export const readFiles = async files => Promise.all([...files].map(async f => ({ name: f.name, text: await f.text() })));

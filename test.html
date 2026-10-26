@@ -7,7 +7,9 @@ import { loadAttack, validate } from './js/attack.js';
 import { linkState, extractTechniques, tagDiff } from './js/mapping.js';
 import { config, redact } from './js/llm.js';
 import { setAuthorized, setKey, getKey, clearKeys, isAuthorized } from './js/keys.js';
-import { state } from './js/store.js';
+import { state, save } from './js/store.js';
+import { coverageMap, status } from './js/coverage.js';
+const backup = Object.fromEntries(Object.keys(localStorage).map(k => [k, localStorage.getItem(k)])); // les tests ne doivent pas toucher aux projets de l'utilisateur
 await loadAttack();
 const t = (n, c) => o.textContent += `${c ? 'OK  ' : 'FAIL'} ${n}\n`;
 t('json fence', parseJson('Voici:\n```json\n{"a":[1]}\n```\nfin').a[0] === 1);
@@ -62,4 +64,27 @@ setKey('openai', 'k-in-session'); t('clé en sessionStorage, pas en localStorage
 t('aucune clé dans les données projet', !JSON.stringify(state).includes('k-in-session'));
 clearKeys(); setAuthorized(false);
 t('clés effacées', getKey('openai') === '' && !isAuthorized());
+// --- statut de couverture (partiel par sous-techniques) ---
+const st = (rules, id) => status(coverageMap(rules), id);
+t('parent couvert seulement via 1 sous-technique → partiel', st([{ techniques: ['T1059.001'], confidence: 'high' }], 'T1059') === 'part');
+t('sous-technique citée → couvert', st([{ techniques: ['T1059.001'], confidence: 'high' }], 'T1059.001') === 'cov');
+t('sous-technique sœur → trou', st([{ techniques: ['T1059.001'], confidence: 'high' }], 'T1059.002') === 'gap');
+t('règle sur le parent → parent couvert, sous-technique partielle', st([{ techniques: ['T1059'], confidence: 'medium' }], 'T1059') === 'cov' && st([{ techniques: ['T1059'], confidence: 'medium' }], 'T1059.002') === 'part');
+t('confiance basse → partiel', st([{ techniques: ['T1490'], confidence: 'low' }], 'T1490') === 'part');
+t('technique sans sous-technique couverte → couvert', st([{ techniques: ['T1490'], confidence: 'high' }], 'T1490') === 'cov');
+// --- références de scénarios stables ---
+const sc0 = state.scenarios;
+state.scenarios = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]; save();
+t('références initiales S1..S3', state.scenarios.map(s => s.ref).join() === '1,2,3');
+state.scenarios = state.scenarios.filter(s => s.id !== 'b'); state.scenarios.push({ id: 'd' }); save();
+t('suppression puis ajout : pas de renumérotation ni de réutilisation', state.scenarios.map(s => s.ref).join() === '1,3,4');
+state.scenarios = [{ id: 'x' }, { id: 'y' }]; save();
+t('liste remplacée → renumérotée depuis S1', state.scenarios.map(s => s.ref).join() === '1,2');
+state.scenarios = sc0;
+localStorage.clear(); for (const [k, v] of Object.entries(backup)) localStorage.setItem(k, v);
+const fails = (o.textContent.match(/^FAIL/gm) || []).length, oks = (o.textContent.match(/^OK/gm) || []).length;
+o.textContent += `
+${fails ? 'ÉCHEC' : 'SUCCÈS'} : ${oks} OK, ${fails} FAIL
+`;
+document.title = fails ? `FAIL ${fails}` : `PASS ${oks}`;
 </script>

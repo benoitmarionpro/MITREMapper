@@ -32,9 +32,12 @@ const attack = JSON.parse(read('data/attack.json'));
 const samples = Object.fromEntries(['cti.txt', 'rules.yml', 'project.json'].map(f => [f, read('data/sample/' + f)]));
 const script = `const __m = {};\nglobalThis.__ATTACK__ = ${JSON.stringify(attack)};\nglobalThis.__SAMPLES__ = ${JSON.stringify(samples)};\n${bundle}`.replace(/<\/script/gi, '<\\/script');
 
+// polices embarquées en data URI (le fichier unique ne peut pas référencer ../fonts/)
+const inlineFonts = css => css.replace(/url\('\.\.\/fonts\/([\w.-]+\.woff2)'\)/g, (_, f) => `url(data:font/woff2;base64,${readFileSync(new URL('fonts/' + f, root)).toString('base64')})`);
+
 const html = read('index.html')
   .replace(/<!-- dev:start[\s\S]*?<!-- dev:end -->\r?\n?/, '')
-  .replace('<link rel="stylesheet" href="css/style.css">', () => `<style>\n${read('css/style.css')}\n</style>`)
+  .replace('<link rel="stylesheet" href="css/style.css">', () => `<style>\n${inlineFonts(read('css/style.css'))}\n</style>`)
   .replace('<script type="module" src="js/app.js"></script>', () => `<script type="module">\n${script}\n</script>`);
 if (html.includes('src="js/app.js"') || html.includes('href="css/style.css"')) throw new Error('Remplacement HTML échoué');
 
