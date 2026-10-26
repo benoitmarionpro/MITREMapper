@@ -630,7 +630,7 @@ Techniques parentes de référence :\n${promptCatalog()}`;
 /** IDs ATT&CK déclarés dans la règle, sans IA : tags Sigma (attack.t1059.001), champs MITRE des exports Sentinel/Splunk/Elastic (T1059…). Validés contre le référentiel. */
 const extractTechniques = body => validate((String(body).match(/\bT\d{4}(?:\.\d{3})?\b/gi) || [])).ok;
 const tagsOf = r => (r.tags ??= extractTechniques(r.body));
-/** Écart (au niveau technique parente) entre les tags déclarés et la lecture de l'IA ; null si aucun. */
+/** Divergence (au niveau technique parente) entre les tags déclarés et la lecture de l'IA ; null si aucun. */
 const tagDiff = (tags, ia) => {
   const P = a => new Set(a.map(parentOf)), pt = P(tags), pi = P(ia);
   const d = { tags: tags.filter(t => !pi.has(parentOf(t))), ia: ia.filter(t => !pt.has(parentOf(t))) };
@@ -671,7 +671,7 @@ const flags = r => {
   const st = state.scenarios.map(s => linkState(r, s)), n = r.scenarios.length;
   return { todo: !r.reviewed, suspect: st.includes('suspect'), miss: st.includes('miss'), none: !n, wide: n >= 4 && n > state.scenarios.length / 2, low: r.confidence === 'low', diff: !!r.tagDiff };
 };
-const FILTERS = { all: 'Toutes', todo: 'À relire', suspect: 'Suspects', miss: 'Oublis possibles', none: 'Sans scénario', wide: 'Trop larges', low: 'Confiance basse', diff: 'Écart tags / IA' };
+const FILTERS = { all: 'Toutes', todo: 'À relire', suspect: 'Suspects', miss: 'Oublis possibles', none: 'Sans scénario', wide: 'Trop larges', low: 'Confiance basse', diff: 'Divergence tags / IA' };
 const SYM = { ok: '●', suspect: '⚠', miss: '◌', '': '·' };
 const view = { q: '', f: 'all', hl: '', sel: null }; // état d'affichage conservé tant que la page est ouverte
 const scId = (ref, sc) => sc.find(s => s.ref === +String(ref).replace(/\D/g, ''))?.id;
@@ -735,7 +735,7 @@ function render(root) {
       <h4>Oublis possibles (${miss.length})</h4>${miss.map(s => `<div class="item"><span class="tag sref">${sref(s)}</span> ${esc(s.name)}<div>${chips(common(r, s))}</div><button data-link="${s.id}">Lier</button></div>`).join('') || '<p class="mut">Aucun.</p>'}
       <h4>Techniques</h4><div>${chips(r.techniques, true) || '<span class="mut">Aucune.</span>'}</div>
       ${tagsOf(r).length ? `<p class="mut">Tags déclarés dans la règle : ${chips(tagsOf(r))}</p>` : ''}
-      ${r.tagDiff ? `<div class="item"><span class="tag gap">Écart tags / IA</span> ${r.tagDiff.tags.length ? `tags seuls : ${chips(r.tagDiff.tags)}` : ''} ${r.tagDiff.ia.length ? `IA seule : ${chips(r.tagDiff.ia)}` : ''}<div><button data-usetags>Utiliser les tags</button></div></div>` : ''}
+      ${r.tagDiff ? `<div class="item"><span class="tag gap">Divergence tags / IA</span> ${r.tagDiff.tags.length ? `tags seuls : ${chips(r.tagDiff.tags)}` : ''} ${r.tagDiff.ia.length ? `IA seule : ${chips(r.tagDiff.ia)}` : ''}<div><button data-usetags>Utiliser les tags</button></div></div>` : ''}
       <div class="bar"><input id="addt" list="techlist" placeholder="T1059.001" style="width:9rem"><button data-addt>Ajouter</button></div>${r.rejected?.length ? `<p class="err">ID inconnu : ${esc(r.rejected.join(', '))}</p>` : ''}
       <h4>Qualification</h4><div class="row"><div><label>Confiance</label><select data-d="confidence">${['', 'high', 'medium', 'low'].map(x => `<option ${x === r.confidence ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
         <div><label>Étape</label><select data-d="stage"><option></option>${state.settings.stages.map(x => `<option ${x === r.stage ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div></div>
@@ -829,7 +829,7 @@ __m.export = (() => {
 const { state, sref } = __m.store;
 const { attack, tech } = __m.attack;
 const { esc } = __m.ui;
-const LBL = { cov: 'Couvert', part: 'Partiel', gap: 'Trou' };
+const LBL = { cov: 'Couvert', part: 'Partiel', gap: 'Écart' };
 const PRIO = { high: 'Haute', medium: 'Moyenne', low: 'Basse' };
 const prio = p => PRIO[p] || p || '';
 const name = id => tech(id)?.name || '';
@@ -848,7 +848,7 @@ function reco(A, g) {
 
 /* ---------- ATT&CK Navigator ---------- */
 const versions = () => ({ layer: '4.5', navigator: '5.1.0', attack: String(attack.version).split('.')[0] });
-/** Couche globale (score = meilleure confiance) ou couche d'un scénario (3 couvert, 2 partiel, 1 trou). */
+/** Couche globale (score = meilleure confiance) ou couche d'un scénario (3 couvert, 2 partiel, 1 écart). */
 function layer(A, s) {
   if (!s) return {
     name: `MITREMapper : ${state.name}`, description: 'Couverture globale : score = meilleure confiance des règles (1 basse, 2 moyenne, 3 haute)',
@@ -857,7 +857,7 @@ function layer(A, s) {
   };
   const x = A.scen.find(r => r.s === s), score = { gap: 1, part: 2, cov: 3 };
   return {
-    name: `${sref(s)} ${s.name}`, description: `Scénario ${sref(s)}, priorité ${prio(s.priority)} : 3 couvert, 2 partiel, 1 trou`,
+    name: `${sref(s)} ${s.name}`, description: `Scénario ${sref(s)}, priorité ${prio(s.priority)} : 3 couvert, 2 partiel, 1 écart`,
     versions: versions(), domain: 'enterprise-attack', gradient: { colors: ['#e24b4a', '#ef9f27', '#2f9e5b'], minValue: 1, maxValue: 3 },
     techniques: x.st.map(([techniqueID, k]) => ({ techniqueID, score: score[k], comment: `${LBL[k]} : ${(A.cm.get(techniqueID)?.rules || []).join('; ') || 'aucune règle'}` })),
   };
@@ -908,11 +908,11 @@ function workbook(A) {
     'Synthèse': [[['Indicateur', 'Valeur'], ['Projet', state.name], ['Date', new Date().toLocaleDateString('fr-FR')], ['Référentiel', `ATT&CK Enterprise v${attack.version}`],
       ['Secteur', c.sector], ['Taille', c.size], ['Pays / zones', c.country], ['Actifs clés', c.assets],
       ['Scénarios', state.scenarios.length], ['Règles', state.rules.length], ['Règles validées', state.rules.filter(r => r.reviewed).length],
-      ['Techniques de scénario', A.nTech], ['Couvertes', A.tot.cov], ['Partielles', A.tot.part], ['Trous', A.tot.gap], ['Couverture globale (%)', A.pct]], [28, 60]],
-    'Scénarios': [[['Réf', 'Scénario', 'Priorité', 'Acteurs', 'Résumé', 'Techniques', 'Couvertes', 'Partielles', 'Trous', 'Couverture (%)', 'Règles liées'],
+      ['Techniques de scénario', A.nTech], ['Couvertes', A.tot.cov], ['Partielles', A.tot.part], ['Écarts', A.tot.gap], ['Couverture globale (%)', A.pct]], [28, 60]],
+    'Scénarios': [[['Réf', 'Scénario', 'Priorité', 'Acteurs', 'Résumé', 'Techniques', 'Couvertes', 'Partielles', 'Écarts', 'Couverture (%)', 'Règles liées'],
       ...A.scen.map(({ s, c: n, pct }) => [sref(s), s.name, prio(s.priority), s.actors || '', s.summary || '', s.techniques.join(' '), n.cov, n.part, n.gap, pct,
         state.rules.filter(r => r.scenarios.includes(s.id)).length])], [6, 45, 10, 25, 60, 40, 11, 11, 8, 14, 12]],
-    'Trous': [[['Technique', 'Nom', 'Statut', 'Priorité', 'Scénarios', 'Recommandation'],
+    'Écarts': [[['Technique', 'Nom', 'Statut', 'Priorité', 'Scénarios', 'Recommandation'],
       ...A.gaps.map(g => [g.id, g.name, LBL[g.k], prio(['high', 'medium', 'low'][g.p]), g.scs.map(sref).join(' '), reco(A, g)])], [12, 40, 10, 10, 22, 80]],
     'Règles': [[['Règle', 'Source', 'Origine', 'Techniques', 'Scénarios', 'Étape', 'Confiance', 'Validée', 'Note'],
       ...state.rules.map(r => [r.name, r.source, r.by === 'tags' ? 'tags' : r.by === 'ia' ? 'IA' : '', r.techniques.join(' '), refs(r.scenarios), r.stage || '', r.confidence || '', r.reviewed ? 'oui' : 'non', r.note || ''])],
@@ -973,21 +973,21 @@ tr{break-inside:avoid}.ref{display:inline-block;background:var(--ind);color:#fff
 <p>${date} · Référentiel MITRE ATT&amp;CK Enterprise v${esc(attack.version)}${[c.sector, c.size, c.country].filter(Boolean).length ? ' · ' + esc([c.sector, c.size, c.country].filter(Boolean).join(' · ')) : ''}</p></header>
 <main>
 <h2>Synthèse</h2>
-<div class="kpis">${kpi(A.pct + ' %', 'des techniques des scénarios couvertes', 'cov')}${kpi(state.scenarios.length, 'scénarios de menace')}${kpi(state.rules.length, `règles analysées (${validated} validées)`)}${kpi(A.tot.cov, 'techniques couvertes', 'cov')}${kpi(A.tot.part, 'techniques partielles', 'part')}${kpi(A.tot.gap, 'trous de détection', 'gap')}</div>
+<div class="kpis">${kpi(A.pct + ' %', 'des techniques des scénarios couvertes', 'cov')}${kpi(state.scenarios.length, 'scénarios de menace')}${kpi(state.rules.length, `règles analysées (${validated} validées)`)}${kpi(A.tot.cov, 'techniques couvertes', 'cov')}${kpi(A.tot.part, 'techniques partielles', 'part')}${kpi(A.tot.gap, 'écarts de détection', 'gap')}</div>
 <p>Sur les ${A.nTech} techniques ATT&amp;CK mobilisées par les ${state.scenarios.length} scénarios retenus${c.assets ? ` (actifs clés : ${esc(c.assets)})` : ''}, ${A.tot.cov} sont couvertes par au moins une règle fiable, ${A.tot.part} le sont partiellement et ${A.tot.gap} ne disposent d'aucune détection.${A.gaps.length ? ` Les ${Math.min(5, A.gaps.length)} actions prioritaires portent sur ${A.gaps.slice(0, 5).map(g => `${g.id} (${esc(g.name)})`).join(', ')}.` : ''}</p>
 
 <h2>Couverture par scénario</h2>
 <table><thead><tr><th>Réf</th><th>Scénario</th><th>Priorité</th><th>Couverture</th><th></th><th>Détail</th></tr></thead><tbody>
-${A.scen.map(({ s, c: n, pct }) => `<tr><td><span class="ref">${sref(s)}</span></td><td><b>${esc(s.name)}</b>${s.actors ? `<div class="mut">${esc(s.actors)}</div>` : ''}</td><td>${prio(s.priority)}</td><td>${bar(n)}</td><td><b>${pct} %</b></td><td class="mut">${n.cov} couvertes, ${n.part} partielles, ${n.gap} trous</td></tr>`).join('')}
+${A.scen.map(({ s, c: n, pct }) => `<tr><td><span class="ref">${sref(s)}</span></td><td><b>${esc(s.name)}</b>${s.actors ? `<div class="mut">${esc(s.actors)}</div>` : ''}</td><td>${prio(s.priority)}</td><td>${bar(n)}</td><td><b>${pct} %</b></td><td class="mut">${n.cov} couvertes, ${n.part} partielles, ${n.gap} écarts</td></tr>`).join('')}
 </tbody></table>
 
-<h2>Trous prioritaires et recommandations</h2>
+<h2>Écarts prioritaires et recommandations</h2>
 ${A.gaps.length ? `<table><thead><tr><th>Technique</th><th>Statut</th><th>Priorité</th><th>Scénarios</th><th>Recommandation</th></tr></thead><tbody>
 ${A.gaps.map(g => `<tr><td><b>${g.id}</b> ${esc(g.name)}</td><td class="st ${g.k}">${LBL[g.k]}</td><td>${prio(['high', 'medium', 'low'][g.p])}</td><td>${g.scs.map(s => `<span class="ref" title="${esc(s.name)}">${sref(s)}</span>`).join(' ')}</td><td>${esc(reco(A, g))}</td></tr>`).join('')}
-</tbody></table>` : '<p>Aucun trou : toutes les techniques des scénarios sont couvertes.</p>'}
+</tbody></table>` : '<p>Aucun écart : toutes les techniques des scénarios sont couvertes.</p>'}
 
 <section class="pg-matrix"><h2>Matrice ATT&amp;CK</h2>
-<p class="legend"><span><i style="background:var(--cov)"></i>Couvert</span><span><i style="background:var(--partb);border:1px solid var(--part)"></i>Partiel</span><span><i style="background:var(--gapb);border:1px solid var(--gap)"></i>Trou (technique d'un scénario)</span><span><i style="background:#fff;box-shadow:inset 3px 0 0 var(--ind);border:1px solid var(--line)"></i>Technique d'un scénario</span></p>
+<p class="legend"><span><i style="background:var(--cov)"></i>Couvert</span><span><i style="background:var(--partb);border:1px solid var(--part)"></i>Partiel</span><span><i style="background:var(--gapb);border:1px solid var(--gap)"></i>Écart (technique d'un scénario)</span><span><i style="background:#fff;box-shadow:inset 3px 0 0 var(--ind);border:1px solid var(--line)"></i>Technique d'un scénario</span></p>
 <div class="matrix">${cols}</div></section>
 
 <h2>Inventaire des règles</h2>
@@ -999,7 +999,7 @@ ${state.rules.map(r => `<tr><td><b>${esc(r.name)}</b><div class="mut">${esc(r.so
 <ul>
 <li>Scénarios dérivés de sources CTI et du profil client ; techniques validées contre le référentiel MITRE ATT&amp;CK Enterprise v${esc(attack.version)}.</li>
 <li>Règles mappées à partir de leurs tags ATT&amp;CK quand ils existent, sinon par analyse assistée par IA ; ${validated}/${state.rules.length} règles relues et validées par un analyste.</li>
-<li><b>Couvert</b> : règle de confiance moyenne ou haute sur la technique, ou sur toutes ses sous-techniques. <b>Partiel</b> : seulement certaines sous-techniques, confiance basse, ou seule la technique parente. <b>Trou</b> : aucune règle.</li>
+<li><b>Couvert</b> : règle de confiance moyenne ou haute sur la technique, ou sur toutes ses sous-techniques. <b>Partiel</b> : seulement certaines sous-techniques, confiance basse, ou seule la technique parente. <b>Écart</b> : aucune règle.</li>
 <li>La couverture mesure l'existence de détections, pas leur efficacité opérationnelle (qualité des journaux, taux de faux positifs, délais de traitement).</li>
 </ul>
 <p class="mut">Généré par MITREMapper (Wavestone) le ${date}.</p>
@@ -1040,9 +1040,9 @@ function status(cm, id) {
   const subs = id.includes('.') ? [] : subsOf(id);
   return subs.length && subs.every(s => (cm.get(s)?.exact || 0) >= 2) ? 'cov' : 'part';
 }
-const LABEL = { cov: 'couvert', part: 'partiel', gap: 'trou' };
+const LABEL = { cov: 'couvert', part: 'partiel', gap: 'écart' };
 const PRIO = { high: 0, medium: 1, low: 2 };
-/** Analyse partagée par l'écran et les exports : statuts par scénario, trous priorisés, totaux. */
+/** Analyse partagée par l'écran et les exports : statuts par scénario, écarts priorisés, totaux. */
 function analysis() {
   const cm = coverageMap();
   const scen = state.scenarios.map(s => {
@@ -1060,7 +1060,7 @@ function analysis() {
   uniq.forEach(k => tot[k]++);
   return { cm, status: id => status(cm, id), scen, gaps, tot, nTech: uniq.size, pct: uniq.size ? Math.round(100 * tot.cov / uniq.size) : 0 };
 }
-const SHOW = { all: 'Toutes les techniques', scenario: 'Techniques des scénarios', gap: 'Trous uniquement', cov: 'Couvertes uniquement' };
+const SHOW = { all: 'Toutes les techniques', scenario: 'Techniques des scénarios', gap: 'Écarts uniquement', cov: 'Couvertes uniquement' };
 const view = { q: '', sc: '', show: 'all' }; // filtres conservés tant que la page est ouverte
 
 function render(root) {
@@ -1071,7 +1071,7 @@ function render(root) {
 
   const A = analysis(), total = A.nTech;
   const rowsHtml = A.scen.map(({ s, st, c, pct }) => `<tr><td><b class="tag sref">${sref(s)}</b> <b>${esc(s.name)}</b> <span class="tag">${esc(s.priority)}</span></td>
-      <td>${pct}% <span class="mut">(${c.cov} couvertes, ${c.part} partielles, ${c.gap} trous)</span></td>
+      <td>${pct}% <span class="mut">(${c.cov} couvertes, ${c.part} partielles, ${c.gap} écarts)</span></td>
       <td>${st.map(([id, k]) => `<span class="tag ${k}" title="${esc(tech(id)?.name)}">${id}</span>`).join('')}</td></tr>`).join('');
   const gapRows = A.gaps.map(g => `<tr><td>${g.id} ${esc(g.name)}</td><td class="${g.k}">${LABEL[g.k]}</td><td>${g.scs.map(s => `<div><span class="tag sref">${sref(s)}</span> ${esc(s.name)}</div>`).join('')}</td></tr>`).join('');
 
@@ -1087,7 +1087,7 @@ function render(root) {
   </div>
   <div id="matrix" class="matrix"></div><aside id="detail" aria-live="polite"></aside>
   <h2>Couverture par scénario</h2><table><thead><tr><th>Scénario</th><th>Couverture</th><th>Techniques</th></tr></thead><tbody>${rowsHtml || '<tr><td colspan=3 class="mut">Aucun scénario</td></tr>'}</tbody></table>
-  <h2>Trous priorisés</h2><table><thead><tr><th>Technique</th><th>Statut</th><th>Scénarios concernés</th></tr></thead><tbody>${gapRows || '<tr><td colspan=3 class="mut">Aucun trou</td></tr>'}</tbody></table>`;
+  <h2>Écarts priorisés</h2><table><thead><tr><th>Technique</th><th>Statut</th><th>Scénarios concernés</th></tr></thead><tbody>${gapRows || '<tr><td colspan=3 class="mut">Aucun écart</td></tr>'}</tbody></table>`;
 
   function drawMatrix() {
     const rel = relSet(), q = view.q.trim().toLowerCase(), n = { cov: 0, part: 0, gap: 0 };
@@ -1105,14 +1105,14 @@ function render(root) {
       }).join('')}</div>`;
     }).join('');
     $(root, '#matrix').innerHTML = cols || '<p class="mut" style="padding:1rem">Aucune technique ne correspond à ces filtres.</p>';
-    $(root, '#legend').innerHTML = `<span class="lg cov">Couvert ${n.cov}</span><span class="lg part">Partiel ${n.part}</span><span class="lg gap">Trou ${n.gap}</span><span class="lg none">Hors scénarios</span>`;
+    $(root, '#legend').innerHTML = `<span class="lg cov">Couvert ${n.cov}</span><span class="lg part">Partiel ${n.part}</span><span class="lg gap">Écart ${n.gap}</span><span class="lg none">Hors scénarios</span>`;
   }
 
   function openDetail(id) {
     const t = parents.find(x => x.id === id), e = cm.get(id), k = kind(t, relSet());
     const scs = state.scenarios.filter(s => s.techniques.some(x => parentOf(x) === id));
     const subs = attack.techniques.filter(x => x.id.startsWith(id + '.'));
-    const st = { cov: ['cov', 'Couvert'], part: ['part', 'Partiel'], gap: ['gap', 'Trou : aucune règle'], none: ['', 'Non couvert, hors scénarios'] }[k];
+    const st = { cov: ['cov', 'Couvert'], part: ['part', 'Partiel'], gap: ['gap', 'Écart : aucune règle'], none: ['', 'Non couvert, hors scénarios'] }[k];
     const rules = e ? e.items.map(r => `<div class="item"><b>${esc(r.name)}</b><div class="mut">${r.techniques.map(x => `<span class="tag">${x}</span>`).join('')} ${esc(r.confidence || '')}${r.stage ? ' · ' + esc(r.stage) : ''}</div></div>`).join('') : '<p class="mut">Aucune règle ne cible cette technique.</p>';
     const scn = scs.map(s => `<div class="item">${esc(s.name)} <span class="tag">${esc(s.priority)}</span></div>`).join('') || '<p class="mut">Aucun scénario ne l’utilise.</p>';
     const sub = subs.map(x => { const c = cm.get(x.id); return `<div class="item sub"><span class="tag ${c ? (c.best >= 2 ? 'cov' : 'part') : ''}">${x.id}</span> ${esc(x.name)}${c ? ` <span class="mut">×${c.n}</span>` : ''}</div>`; }).join('') || '<p class="mut">Aucune.</p>';

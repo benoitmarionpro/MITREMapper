@@ -4,7 +4,7 @@
 Outil 100 % client-side (HTML/JS/CSS, hébergement statique) qui aide un analyste detection engineering / CTI à :
 1. **Dériver des scénarios de menace** à couvrir pour un type de client, à partir de rapports CTI et de son profil.
 2. **Mapper des règles de détection** (Sigma, KQL, SPL, documentation…) vers MITRE ATT&CK, une étape de stratégie de détection et ces scénarios.
-3. **Produire une matrice de couverture** (matrice ATT&CK, couverture par scénario, trous priorisés, export Navigator/CSV).
+3. **Produire une matrice de couverture** (matrice ATT&CK, couverture par scénario, écarts priorisés, export Navigator/CSV).
 
 Le LLM fait le gros du travail ; l'utilisateur relit et corrige. Les IDs ATT&CK renvoyés par le LLM sont toujours validés contre le référentiel embarqué (anti-hallucination).
 
@@ -43,9 +43,9 @@ Projets (`store.js`) : projet courant + réglages dans `mitremapper.v1` ; biblio
 
 Revue du mapping (`mapping.js`) : `linkState(règle, scénario)` → `ok` (lié, technique commune au niveau parent), `suspect` (lié sans technique commune), `miss` (non lié mais technique commune). `why` et `reviewed` sont optionnels (projets anciens compatibles).
 
-Mapping déterministe d'abord (`mapping.js`) : `extractTechniques(body)` lit les IDs ATT&CK déclarés (tags Sigma, champs MITRE des exports) et les valide ; une règle taguée est mappée sans IA (`by: 'tags'`, scénarios liés par technique commune). L'IA ne traite que les règles sans tag, ou toutes si l'option de vérification est cochée (`tagDiff` = écart au niveau technique parente entre tags et lecture IA).
+Mapping déterministe d'abord (`mapping.js`) : `extractTechniques(body)` lit les IDs ATT&CK déclarés (tags Sigma, champs MITRE des exports) et les valide ; une règle taguée est mappée sans IA (`by: 'tags'`, scénarios liés par technique commune). L'IA ne traite que les règles sans tag, ou toutes si l'option de vérification est cochée (`tagDiff` = divergence au niveau technique parente entre tags et lecture IA).
 
-Règle de couverture (`coverage.js`, `status(coverageMap(), id)`) : *couverte* si une règle de confiance ≥ medium cite la technique elle-même, ou si toutes ses sous-techniques sont couvertes ; *partielle* si seulement certaines sous-techniques, confiance `low`, ou (sous-technique) seule la parente est couverte ; sinon *trou*.
+Règle de couverture (`coverage.js`, `status(coverageMap(), id)`) : *couverte* si une règle de confiance ≥ medium cite la technique elle-même, ou si toutes ses sous-techniques sont couvertes ; *partielle* si seulement certaines sous-techniques, confiance `low`, ou (sous-technique) seule la parente est couverte ; sinon *écart*.
 
 ## Conventions
 - Interface et prompts en français. Les noms de techniques restent ceux de MITRE.

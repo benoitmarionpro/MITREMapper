@@ -16,7 +16,7 @@ Techniques parentes de référence :\n${promptCatalog()}`;
 /** IDs ATT&CK déclarés dans la règle, sans IA : tags Sigma (attack.t1059.001), champs MITRE des exports Sentinel/Splunk/Elastic (T1059…). Validés contre le référentiel. */
 export const extractTechniques = body => validate((String(body).match(/\bT\d{4}(?:\.\d{3})?\b/gi) || [])).ok;
 const tagsOf = r => (r.tags ??= extractTechniques(r.body));
-/** Écart (au niveau technique parente) entre les tags déclarés et la lecture de l'IA ; null si aucun. */
+/** Divergence (au niveau technique parente) entre les tags déclarés et la lecture de l'IA ; null si aucun. */
 export const tagDiff = (tags, ia) => {
   const P = a => new Set(a.map(parentOf)), pt = P(tags), pi = P(ia);
   const d = { tags: tags.filter(t => !pi.has(parentOf(t))), ia: ia.filter(t => !pt.has(parentOf(t))) };
@@ -57,7 +57,7 @@ const flags = r => {
   const st = state.scenarios.map(s => linkState(r, s)), n = r.scenarios.length;
   return { todo: !r.reviewed, suspect: st.includes('suspect'), miss: st.includes('miss'), none: !n, wide: n >= 4 && n > state.scenarios.length / 2, low: r.confidence === 'low', diff: !!r.tagDiff };
 };
-const FILTERS = { all: 'Toutes', todo: 'À relire', suspect: 'Suspects', miss: 'Oublis possibles', none: 'Sans scénario', wide: 'Trop larges', low: 'Confiance basse', diff: 'Écart tags / IA' };
+const FILTERS = { all: 'Toutes', todo: 'À relire', suspect: 'Suspects', miss: 'Oublis possibles', none: 'Sans scénario', wide: 'Trop larges', low: 'Confiance basse', diff: 'Divergence tags / IA' };
 const SYM = { ok: '●', suspect: '⚠', miss: '◌', '': '·' };
 const view = { q: '', f: 'all', hl: '', sel: null }; // état d'affichage conservé tant que la page est ouverte
 const scId = (ref, sc) => sc.find(s => s.ref === +String(ref).replace(/\D/g, ''))?.id;
@@ -121,7 +121,7 @@ export function render(root) {
       <h4>Oublis possibles (${miss.length})</h4>${miss.map(s => `<div class="item"><span class="tag sref">${sref(s)}</span> ${esc(s.name)}<div>${chips(common(r, s))}</div><button data-link="${s.id}">Lier</button></div>`).join('') || '<p class="mut">Aucun.</p>'}
       <h4>Techniques</h4><div>${chips(r.techniques, true) || '<span class="mut">Aucune.</span>'}</div>
       ${tagsOf(r).length ? `<p class="mut">Tags déclarés dans la règle : ${chips(tagsOf(r))}</p>` : ''}
-      ${r.tagDiff ? `<div class="item"><span class="tag gap">Écart tags / IA</span> ${r.tagDiff.tags.length ? `tags seuls : ${chips(r.tagDiff.tags)}` : ''} ${r.tagDiff.ia.length ? `IA seule : ${chips(r.tagDiff.ia)}` : ''}<div><button data-usetags>Utiliser les tags</button></div></div>` : ''}
+      ${r.tagDiff ? `<div class="item"><span class="tag gap">Divergence tags / IA</span> ${r.tagDiff.tags.length ? `tags seuls : ${chips(r.tagDiff.tags)}` : ''} ${r.tagDiff.ia.length ? `IA seule : ${chips(r.tagDiff.ia)}` : ''}<div><button data-usetags>Utiliser les tags</button></div></div>` : ''}
       <div class="bar"><input id="addt" list="techlist" placeholder="T1059.001" style="width:9rem"><button data-addt>Ajouter</button></div>${r.rejected?.length ? `<p class="err">ID inconnu : ${esc(r.rejected.join(', '))}</p>` : ''}
       <h4>Qualification</h4><div class="row"><div><label>Confiance</label><select data-d="confidence">${['', 'high', 'medium', 'low'].map(x => `<option ${x === r.confidence ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
         <div><label>Étape</label><select data-d="stage"><option></option>${state.settings.stages.map(x => `<option ${x === r.stage ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div></div>

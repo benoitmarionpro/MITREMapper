@@ -4,7 +4,7 @@ import { state, sref } from './store.js';
 import { attack, tech } from './attack.js';
 import { esc } from './ui.js';
 
-const LBL = { cov: 'Couvert', part: 'Partiel', gap: 'Trou' };
+const LBL = { cov: 'Couvert', part: 'Partiel', gap: 'Écart' };
 const PRIO = { high: 'Haute', medium: 'Moyenne', low: 'Basse' };
 const prio = p => PRIO[p] || p || '';
 const name = id => tech(id)?.name || '';
@@ -23,7 +23,7 @@ export function reco(A, g) {
 
 /* ---------- ATT&CK Navigator ---------- */
 const versions = () => ({ layer: '4.5', navigator: '5.1.0', attack: String(attack.version).split('.')[0] });
-/** Couche globale (score = meilleure confiance) ou couche d'un scénario (3 couvert, 2 partiel, 1 trou). */
+/** Couche globale (score = meilleure confiance) ou couche d'un scénario (3 couvert, 2 partiel, 1 écart). */
 export function layer(A, s) {
   if (!s) return {
     name: `MITREMapper : ${state.name}`, description: 'Couverture globale : score = meilleure confiance des règles (1 basse, 2 moyenne, 3 haute)',
@@ -32,7 +32,7 @@ export function layer(A, s) {
   };
   const x = A.scen.find(r => r.s === s), score = { gap: 1, part: 2, cov: 3 };
   return {
-    name: `${sref(s)} ${s.name}`, description: `Scénario ${sref(s)}, priorité ${prio(s.priority)} : 3 couvert, 2 partiel, 1 trou`,
+    name: `${sref(s)} ${s.name}`, description: `Scénario ${sref(s)}, priorité ${prio(s.priority)} : 3 couvert, 2 partiel, 1 écart`,
     versions: versions(), domain: 'enterprise-attack', gradient: { colors: ['#e24b4a', '#ef9f27', '#2f9e5b'], minValue: 1, maxValue: 3 },
     techniques: x.st.map(([techniqueID, k]) => ({ techniqueID, score: score[k], comment: `${LBL[k]} : ${(A.cm.get(techniqueID)?.rules || []).join('; ') || 'aucune règle'}` })),
   };
@@ -83,11 +83,11 @@ export function workbook(A) {
     'Synthèse': [[['Indicateur', 'Valeur'], ['Projet', state.name], ['Date', new Date().toLocaleDateString('fr-FR')], ['Référentiel', `ATT&CK Enterprise v${attack.version}`],
       ['Secteur', c.sector], ['Taille', c.size], ['Pays / zones', c.country], ['Actifs clés', c.assets],
       ['Scénarios', state.scenarios.length], ['Règles', state.rules.length], ['Règles validées', state.rules.filter(r => r.reviewed).length],
-      ['Techniques de scénario', A.nTech], ['Couvertes', A.tot.cov], ['Partielles', A.tot.part], ['Trous', A.tot.gap], ['Couverture globale (%)', A.pct]], [28, 60]],
-    'Scénarios': [[['Réf', 'Scénario', 'Priorité', 'Acteurs', 'Résumé', 'Techniques', 'Couvertes', 'Partielles', 'Trous', 'Couverture (%)', 'Règles liées'],
+      ['Techniques de scénario', A.nTech], ['Couvertes', A.tot.cov], ['Partielles', A.tot.part], ['Écarts', A.tot.gap], ['Couverture globale (%)', A.pct]], [28, 60]],
+    'Scénarios': [[['Réf', 'Scénario', 'Priorité', 'Acteurs', 'Résumé', 'Techniques', 'Couvertes', 'Partielles', 'Écarts', 'Couverture (%)', 'Règles liées'],
       ...A.scen.map(({ s, c: n, pct }) => [sref(s), s.name, prio(s.priority), s.actors || '', s.summary || '', s.techniques.join(' '), n.cov, n.part, n.gap, pct,
         state.rules.filter(r => r.scenarios.includes(s.id)).length])], [6, 45, 10, 25, 60, 40, 11, 11, 8, 14, 12]],
-    'Trous': [[['Technique', 'Nom', 'Statut', 'Priorité', 'Scénarios', 'Recommandation'],
+    'Écarts': [[['Technique', 'Nom', 'Statut', 'Priorité', 'Scénarios', 'Recommandation'],
       ...A.gaps.map(g => [g.id, g.name, LBL[g.k], prio(['high', 'medium', 'low'][g.p]), g.scs.map(sref).join(' '), reco(A, g)])], [12, 40, 10, 10, 22, 80]],
     'Règles': [[['Règle', 'Source', 'Origine', 'Techniques', 'Scénarios', 'Étape', 'Confiance', 'Validée', 'Note'],
       ...state.rules.map(r => [r.name, r.source, r.by === 'tags' ? 'tags' : r.by === 'ia' ? 'IA' : '', r.techniques.join(' '), refs(r.scenarios), r.stage || '', r.confidence || '', r.reviewed ? 'oui' : 'non', r.note || ''])],
@@ -148,21 +148,21 @@ tr{break-inside:avoid}.ref{display:inline-block;background:var(--ind);color:#fff
 <p>${date} · Référentiel MITRE ATT&amp;CK Enterprise v${esc(attack.version)}${[c.sector, c.size, c.country].filter(Boolean).length ? ' · ' + esc([c.sector, c.size, c.country].filter(Boolean).join(' · ')) : ''}</p></header>
 <main>
 <h2>Synthèse</h2>
-<div class="kpis">${kpi(A.pct + ' %', 'des techniques des scénarios couvertes', 'cov')}${kpi(state.scenarios.length, 'scénarios de menace')}${kpi(state.rules.length, `règles analysées (${validated} validées)`)}${kpi(A.tot.cov, 'techniques couvertes', 'cov')}${kpi(A.tot.part, 'techniques partielles', 'part')}${kpi(A.tot.gap, 'trous de détection', 'gap')}</div>
+<div class="kpis">${kpi(A.pct + ' %', 'des techniques des scénarios couvertes', 'cov')}${kpi(state.scenarios.length, 'scénarios de menace')}${kpi(state.rules.length, `règles analysées (${validated} validées)`)}${kpi(A.tot.cov, 'techniques couvertes', 'cov')}${kpi(A.tot.part, 'techniques partielles', 'part')}${kpi(A.tot.gap, 'écarts de détection', 'gap')}</div>
 <p>Sur les ${A.nTech} techniques ATT&amp;CK mobilisées par les ${state.scenarios.length} scénarios retenus${c.assets ? ` (actifs clés : ${esc(c.assets)})` : ''}, ${A.tot.cov} sont couvertes par au moins une règle fiable, ${A.tot.part} le sont partiellement et ${A.tot.gap} ne disposent d'aucune détection.${A.gaps.length ? ` Les ${Math.min(5, A.gaps.length)} actions prioritaires portent sur ${A.gaps.slice(0, 5).map(g => `${g.id} (${esc(g.name)})`).join(', ')}.` : ''}</p>
 
 <h2>Couverture par scénario</h2>
 <table><thead><tr><th>Réf</th><th>Scénario</th><th>Priorité</th><th>Couverture</th><th></th><th>Détail</th></tr></thead><tbody>
-${A.scen.map(({ s, c: n, pct }) => `<tr><td><span class="ref">${sref(s)}</span></td><td><b>${esc(s.name)}</b>${s.actors ? `<div class="mut">${esc(s.actors)}</div>` : ''}</td><td>${prio(s.priority)}</td><td>${bar(n)}</td><td><b>${pct} %</b></td><td class="mut">${n.cov} couvertes, ${n.part} partielles, ${n.gap} trous</td></tr>`).join('')}
+${A.scen.map(({ s, c: n, pct }) => `<tr><td><span class="ref">${sref(s)}</span></td><td><b>${esc(s.name)}</b>${s.actors ? `<div class="mut">${esc(s.actors)}</div>` : ''}</td><td>${prio(s.priority)}</td><td>${bar(n)}</td><td><b>${pct} %</b></td><td class="mut">${n.cov} couvertes, ${n.part} partielles, ${n.gap} écarts</td></tr>`).join('')}
 </tbody></table>
 
-<h2>Trous prioritaires et recommandations</h2>
+<h2>Écarts prioritaires et recommandations</h2>
 ${A.gaps.length ? `<table><thead><tr><th>Technique</th><th>Statut</th><th>Priorité</th><th>Scénarios</th><th>Recommandation</th></tr></thead><tbody>
 ${A.gaps.map(g => `<tr><td><b>${g.id}</b> ${esc(g.name)}</td><td class="st ${g.k}">${LBL[g.k]}</td><td>${prio(['high', 'medium', 'low'][g.p])}</td><td>${g.scs.map(s => `<span class="ref" title="${esc(s.name)}">${sref(s)}</span>`).join(' ')}</td><td>${esc(reco(A, g))}</td></tr>`).join('')}
-</tbody></table>` : '<p>Aucun trou : toutes les techniques des scénarios sont couvertes.</p>'}
+</tbody></table>` : '<p>Aucun écart : toutes les techniques des scénarios sont couvertes.</p>'}
 
 <section class="pg-matrix"><h2>Matrice ATT&amp;CK</h2>
-<p class="legend"><span><i style="background:var(--cov)"></i>Couvert</span><span><i style="background:var(--partb);border:1px solid var(--part)"></i>Partiel</span><span><i style="background:var(--gapb);border:1px solid var(--gap)"></i>Trou (technique d'un scénario)</span><span><i style="background:#fff;box-shadow:inset 3px 0 0 var(--ind);border:1px solid var(--line)"></i>Technique d'un scénario</span></p>
+<p class="legend"><span><i style="background:var(--cov)"></i>Couvert</span><span><i style="background:var(--partb);border:1px solid var(--part)"></i>Partiel</span><span><i style="background:var(--gapb);border:1px solid var(--gap)"></i>Écart (technique d'un scénario)</span><span><i style="background:#fff;box-shadow:inset 3px 0 0 var(--ind);border:1px solid var(--line)"></i>Technique d'un scénario</span></p>
 <div class="matrix">${cols}</div></section>
 
 <h2>Inventaire des règles</h2>
@@ -174,7 +174,7 @@ ${state.rules.map(r => `<tr><td><b>${esc(r.name)}</b><div class="mut">${esc(r.so
 <ul>
 <li>Scénarios dérivés de sources CTI et du profil client ; techniques validées contre le référentiel MITRE ATT&amp;CK Enterprise v${esc(attack.version)}.</li>
 <li>Règles mappées à partir de leurs tags ATT&amp;CK quand ils existent, sinon par analyse assistée par IA ; ${validated}/${state.rules.length} règles relues et validées par un analyste.</li>
-<li><b>Couvert</b> : règle de confiance moyenne ou haute sur la technique, ou sur toutes ses sous-techniques. <b>Partiel</b> : seulement certaines sous-techniques, confiance basse, ou seule la technique parente. <b>Trou</b> : aucune règle.</li>
+<li><b>Couvert</b> : règle de confiance moyenne ou haute sur la technique, ou sur toutes ses sous-techniques. <b>Partiel</b> : seulement certaines sous-techniques, confiance basse, ou seule la technique parente. <b>Écart</b> : aucune règle.</li>
 <li>La couverture mesure l'existence de détections, pas leur efficacité opérationnelle (qualité des journaux, taux de faux positifs, délais de traitement).</li>
 </ul>
 <p class="mut">Généré par MITREMapper (Wavestone) le ${date}.</p>

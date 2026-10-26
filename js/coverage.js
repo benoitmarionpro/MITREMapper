@@ -30,9 +30,9 @@ export function status(cm, id) {
   const subs = id.includes('.') ? [] : subsOf(id);
   return subs.length && subs.every(s => (cm.get(s)?.exact || 0) >= 2) ? 'cov' : 'part';
 }
-export const LABEL = { cov: 'couvert', part: 'partiel', gap: 'trou' };
+export const LABEL = { cov: 'couvert', part: 'partiel', gap: 'écart' };
 const PRIO = { high: 0, medium: 1, low: 2 };
-/** Analyse partagée par l'écran et les exports : statuts par scénario, trous priorisés, totaux. */
+/** Analyse partagée par l'écran et les exports : statuts par scénario, écarts priorisés, totaux. */
 export function analysis() {
   const cm = coverageMap();
   const scen = state.scenarios.map(s => {
@@ -50,7 +50,7 @@ export function analysis() {
   uniq.forEach(k => tot[k]++);
   return { cm, status: id => status(cm, id), scen, gaps, tot, nTech: uniq.size, pct: uniq.size ? Math.round(100 * tot.cov / uniq.size) : 0 };
 }
-const SHOW = { all: 'Toutes les techniques', scenario: 'Techniques des scénarios', gap: 'Trous uniquement', cov: 'Couvertes uniquement' };
+const SHOW = { all: 'Toutes les techniques', scenario: 'Techniques des scénarios', gap: 'Écarts uniquement', cov: 'Couvertes uniquement' };
 const view = { q: '', sc: '', show: 'all' }; // filtres conservés tant que la page est ouverte
 
 export function render(root) {
@@ -61,7 +61,7 @@ export function render(root) {
 
   const A = analysis(), total = A.nTech;
   const rowsHtml = A.scen.map(({ s, st, c, pct }) => `<tr><td><b class="tag sref">${sref(s)}</b> <b>${esc(s.name)}</b> <span class="tag">${esc(s.priority)}</span></td>
-      <td>${pct}% <span class="mut">(${c.cov} couvertes, ${c.part} partielles, ${c.gap} trous)</span></td>
+      <td>${pct}% <span class="mut">(${c.cov} couvertes, ${c.part} partielles, ${c.gap} écarts)</span></td>
       <td>${st.map(([id, k]) => `<span class="tag ${k}" title="${esc(tech(id)?.name)}">${id}</span>`).join('')}</td></tr>`).join('');
   const gapRows = A.gaps.map(g => `<tr><td>${g.id} ${esc(g.name)}</td><td class="${g.k}">${LABEL[g.k]}</td><td>${g.scs.map(s => `<div><span class="tag sref">${sref(s)}</span> ${esc(s.name)}</div>`).join('')}</td></tr>`).join('');
 
@@ -77,7 +77,7 @@ export function render(root) {
   </div>
   <div id="matrix" class="matrix"></div><aside id="detail" aria-live="polite"></aside>
   <h2>Couverture par scénario</h2><table><thead><tr><th>Scénario</th><th>Couverture</th><th>Techniques</th></tr></thead><tbody>${rowsHtml || '<tr><td colspan=3 class="mut">Aucun scénario</td></tr>'}</tbody></table>
-  <h2>Trous priorisés</h2><table><thead><tr><th>Technique</th><th>Statut</th><th>Scénarios concernés</th></tr></thead><tbody>${gapRows || '<tr><td colspan=3 class="mut">Aucun trou</td></tr>'}</tbody></table>`;
+  <h2>Écarts priorisés</h2><table><thead><tr><th>Technique</th><th>Statut</th><th>Scénarios concernés</th></tr></thead><tbody>${gapRows || '<tr><td colspan=3 class="mut">Aucun écart</td></tr>'}</tbody></table>`;
 
   function drawMatrix() {
     const rel = relSet(), q = view.q.trim().toLowerCase(), n = { cov: 0, part: 0, gap: 0 };
@@ -95,14 +95,14 @@ export function render(root) {
       }).join('')}</div>`;
     }).join('');
     $(root, '#matrix').innerHTML = cols || '<p class="mut" style="padding:1rem">Aucune technique ne correspond à ces filtres.</p>';
-    $(root, '#legend').innerHTML = `<span class="lg cov">Couvert ${n.cov}</span><span class="lg part">Partiel ${n.part}</span><span class="lg gap">Trou ${n.gap}</span><span class="lg none">Hors scénarios</span>`;
+    $(root, '#legend').innerHTML = `<span class="lg cov">Couvert ${n.cov}</span><span class="lg part">Partiel ${n.part}</span><span class="lg gap">Écart ${n.gap}</span><span class="lg none">Hors scénarios</span>`;
   }
 
   function openDetail(id) {
     const t = parents.find(x => x.id === id), e = cm.get(id), k = kind(t, relSet());
     const scs = state.scenarios.filter(s => s.techniques.some(x => parentOf(x) === id));
     const subs = attack.techniques.filter(x => x.id.startsWith(id + '.'));
-    const st = { cov: ['cov', 'Couvert'], part: ['part', 'Partiel'], gap: ['gap', 'Trou : aucune règle'], none: ['', 'Non couvert, hors scénarios'] }[k];
+    const st = { cov: ['cov', 'Couvert'], part: ['part', 'Partiel'], gap: ['gap', 'Écart : aucune règle'], none: ['', 'Non couvert, hors scénarios'] }[k];
     const rules = e ? e.items.map(r => `<div class="item"><b>${esc(r.name)}</b><div class="mut">${r.techniques.map(x => `<span class="tag">${x}</span>`).join('')} ${esc(r.confidence || '')}${r.stage ? ' · ' + esc(r.stage) : ''}</div></div>`).join('') : '<p class="mut">Aucune règle ne cible cette technique.</p>';
     const scn = scs.map(s => `<div class="item">${esc(s.name)} <span class="tag">${esc(s.priority)}</span></div>`).join('') || '<p class="mut">Aucun scénario ne l’utilise.</p>';
     const sub = subs.map(x => { const c = cm.get(x.id); return `<div class="item sub"><span class="tag ${c ? (c.best >= 2 ? 'cov' : 'part') : ''}">${x.id}</span> ${esc(x.name)}${c ? ` <span class="mut">×${c.n}</span>` : ''}</div>`; }).join('') || '<p class="mut">Aucune.</p>';

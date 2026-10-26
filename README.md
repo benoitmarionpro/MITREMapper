@@ -6,7 +6,7 @@ Outil web local pour passer de la **veille CTI** à une **matrice de couverture 
 
 1. des rapports de menace + le profil du client → **scénarios de menace** à couvrir ;
 2. vos règles de détection (ou leur documentation) → **mapping MITRE ATT&CK**, étape de stratégie de détection, scénarios ;
-3. une **matrice de couverture** avec les trous classés par priorité.
+3. une **matrice de couverture** avec les écarts classés par priorité.
 
 L'IA propose, vous validez. Tout tourne dans votre navigateur : pas de serveur, vos données restent en local.
 
@@ -53,7 +53,7 @@ Coller ou charger des règles (Sigma, KQL, SPL, texte de documentation…). Sép
 
 **Mapping sans IA d'abord.** Les règles qui déclarent leurs techniques (tags Sigma `attack.t1059.001`, champs MITRE des exports Sentinel, Splunk, Elastic…) sont mappées localement : techniques lues dans la règle et validées contre ATT&CK, scénarios liés automatiquement s'ils partagent une technique (justification « Lien automatique »). Seules les règles sans tag partent vers l'IA ; sans autorisation IA, le mapping des règles taguées fonctionne quand même. La colonne Règle indique l'origine (*via tags* / *via IA*).
 
-Option **« Faire aussi relire par l'IA les règles qui ont des tags »** : l'IA lit la logique de la règle indépendamment des tags ; les différences (au niveau technique parente) apparaissent dans le filtre **Écart tags / IA** et dans le détail, avec un bouton **Utiliser les tags**. Exemple dans la démo : la règle PsExec est taguée T1569.002 (exécution de service) alors que l'IA y voit T1021.002 (mouvement latéral SMB).
+Option **« Faire aussi relire par l'IA les règles qui ont des tags »** : l'IA lit la logique de la règle indépendamment des tags ; les différences (au niveau technique parente) apparaissent dans le filtre **Divergence tags / IA** et dans le détail, avec un bouton **Utiliser les tags**. Exemple dans la démo : la règle PsExec est taguée T1569.002 (exécution de service) alors que l'IA y voit T1021.002 (mouvement latéral SMB).
 
 La **revue du mapping** est une matrice règles × scénarios (S1…Sn, nom au survol) :
 
@@ -65,14 +65,14 @@ La **revue du mapping** est une matrice règles × scénarios (S1…Sn, nom au s
 
 ## 4. Couverture
 
-- **Matrice ATT&CK** : vert = couvert, ambre = partiel, rouge = trou (technique d'un scénario sans règle), barre colorée à gauche = technique présente dans un scénario, ×n = nombre de règles. Les en-têtes de tactiques restent visibles au défilement et affichent « couvertes/total » pour les scénarios. Recherche par ID ou nom, filtre par scénario, filtre par statut (techniques des scénarios, trous, couvertes). Un clic sur une technique ouvre un volet avec ses règles, ses scénarios et ses sous-techniques ; Échap le ferme.
-- **Statuts** : *couvert* = règle de confiance ≥ medium sur la technique elle-même, ou toutes ses sous-techniques couvertes ; *partiel* = seulement certaines sous-techniques couvertes (le volet de détail indique « n/N couvertes »), confiance basse, ou pour une sous-technique seule sa parente est couverte ; *trou* = aucune règle.
-- **Couverture par scénario** : pourcentage de techniques couvertes, partielles et en trou.
-- **Trous priorisés** par priorité de scénario.
+- **Matrice ATT&CK** : vert = couvert, ambre = partiel, rouge = écart (technique d'un scénario sans règle), barre colorée à gauche = technique présente dans un scénario, ×n = nombre de règles. Les en-têtes de tactiques restent visibles au défilement et affichent « couvertes/total » pour les scénarios. Recherche par ID ou nom, filtre par scénario, filtre par statut (techniques des scénarios, écarts, couvertes). Un clic sur une technique ouvre un volet avec ses règles, ses scénarios et ses sous-techniques ; Échap le ferme.
+- **Statuts** : *couvert* = règle de confiance ≥ medium sur la technique elle-même, ou toutes ses sous-techniques couvertes ; *partiel* = seulement certaines sous-techniques couvertes (le volet de détail indique « n/N couvertes »), confiance basse, ou pour une sous-technique seule sa parente est couverte ; *écart* = aucune règle.
+- **Couverture par scénario** : pourcentage de techniques couvertes, partielles et en écart.
+- **Écarts priorisés** par priorité de scénario.
 - **Livrables** :
-  - **Rapport client (PDF)** : ouvre un rapport aux couleurs Wavestone dans un nouvel onglet, à imprimer en PDF (bouton « Imprimer / PDF ») ; **Rapport (HTML)** le télécharge. Contenu : synthèse chiffrée, couverture par scénario, trous prioritaires avec recommandation, matrice ATT&CK (page paysage), inventaire des règles, méthode et limites.
-  - **Classeur Excel** (.xlsx, généré localement) : onglets Synthèse, Scénarios, Trous (avec recommandations), Règles, Techniques.
-  - **Couche Navigator** : couche globale, ou celle du scénario sélectionné dans le filtre (3 couvert, 2 partiel, 1 trou) ; **Couches Navigator par scénario (.zip)** : la couche globale et une couche par scénario.
+  - **Rapport client (PDF)** : ouvre un rapport aux couleurs Wavestone dans un nouvel onglet, à imprimer en PDF (bouton « Imprimer / PDF ») ; **Rapport (HTML)** le télécharge. Contenu : synthèse chiffrée, couverture par scénario, écarts prioritaires avec recommandation, matrice ATT&CK (page paysage), inventaire des règles, méthode et limites.
+  - **Classeur Excel** (.xlsx, généré localement) : onglets Synthèse, Scénarios, Écarts (avec recommandations), Règles, Techniques.
+  - **Couche Navigator** : couche globale, ou celle du scénario sélectionné dans le filtre (3 couvert, 2 partiel, 1 écart) ; **Couches Navigator par scénario (.zip)** : la couche globale et une couche par scénario.
   - **CSV** des règles.
 
 ## Projets et sauvegarde
