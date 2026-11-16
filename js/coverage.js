@@ -1,7 +1,7 @@
 import { state, save, exportJson, download, loadDemo, sref, uid } from './store.js';
 import { attack, parentOf, tech, sourcesOf, validate } from './attack.js';
 import { chatJson, fence, UNTRUSTED } from './llm.js';
-import { extractTechniques } from './mapping.js';
+import { extractTechniques, mapRules, focusRule } from './mapping.js';
 import { reportHtml, workbook, layer, layersZip } from './export.js';
 import { esc, $, showProject, undoable, run, gateAI } from './ui.js';
 import { t, lang, locale } from './i18n.js';
@@ -108,7 +108,8 @@ export function render(root) {
       <p><b>${t('Améliorées')} (${D.better.length})</b> ${ids(D.better, true)}</p><p><b>${t('Dégradées')} (${D.worse.length})</b> ${ids(D.worse, true)}</p>
       ${D.added.length || D.removed.length ? `<p class="mut">${t('Périmètre : {a} technique(s) ajoutée(s), {r} retirée(s) depuis l’instantané.', { a: D.added.length, r: D.removed.length })}</p>` : ''}`;
 
-  root.innerHTML = `${state.rules.length || state.scenarios.length ? '' : `<div class="card"><b>${t('Aucune donnée.')}</b> ${t('Génère des scénarios et mappe des règles, ou')} <button id="demo" class="pri">${t('charge la démo complète')}</button></div>`}
+  const unmapped = state.rules.filter(r => !r.mapped).length;
+  root.innerHTML = `${unmapped ? `<div class="card warnc"><b>${t('{n} règle(s) non mappée(s) : la couverture ne les prend pas encore en compte.', { n: unmapped })}</b> <button id="gomap" class="pri">${t('Mapper dans Règles')}</button></div>` : ''}${state.rules.length || state.scenarios.length ? '' : `<div class="card"><b>${t('Aucune donnée.')}</b> ${t('Génère des scénarios et mappe des règles, ou')} <button id="demo" class="pri">${t('charge la démo complète')}</button></div>`}
   <div class="bar"><button id="rep" class="pri">${t('Rapport client (PDF)')}</button><button id="reph">${t('Rapport (HTML)')}</button><button id="xlsx">${t('Classeur Excel')}</button><button id="nav">${t('Couche Navigator')}</button><button id="navz">${t('Couches Navigator par scénario (.zip)')}</button><button id="csv">${t('CSV (règles)')}</button>
     <span class="mut">${t('{r} règles · {s} scénarios · {n} techniques de scénario', { r: state.rules.length, s: state.scenarios.length, n: total })}</span></div>
   <h2>${t('Matrice ATT&CK')}</h2>
@@ -161,6 +162,16 @@ export function render(root) {
       ${k !== 'cov' ? `<div class="bar"><button data-draft="${id}">${t('Ébaucher une règle Sigma (IA)')}</button></div>` : ''}`;
     d.classList.add('open'); $(d, '.x').focus();
   }
+  /** Après l'ajout d'une ébauche (page réaffichée) : volet de confirmation, avec accès à la règle dans l'onglet Règles pour la relire et la valider. */
+  function draftDone(rule) {
+    const d = $(root, '#detail'), names = state.scenarios.filter(s => rule.scenarios.includes(s.id));
+    d.innerHTML = `<button class="x" aria-label="${t('Fermer')}">×</button><h3>${esc(rule.name)}</h3>
+      <p><span class="tag part">${t('Confiance basse : à valider')}</span> ${rule.techniques.map(x => `<span class="tag">${x}</span>`).join('')}</p>
+      <h4>${t('Scénarios liés')} (${names.length})</h4>${names.map(s => `<div class="item"><span class="tag sref">${sref(s)}</span> ${esc(s.name)}<div class="mut">${esc(rule.why?.[s.id] || '')}</div></div>`).join('') || `<p class="mut">${t('Aucun scénario lié.')}</p>`}
+      <div class="bar"><button id="gorule" class="pri">${t('Relire et valider dans Règles')}</button></div>`;
+    d.classList.add('open'); $(d, '#gorule').focus();
+    $(d, '#gorule').onclick = () => { focusRule(rule.id); document.querySelector('#tabs [data-id="rules"]')?.click(); };
+  }
   /** Ébauche de règle Sigma pour une technique non couverte : générée par l'IA, ajoutée en confiance basse (la technique reste partielle tant que la règle n'est pas validée). */
   function draft(id) {
     const te = tech(id), d = $(root, '#detail');
@@ -184,13 +195,21 @@ ${fence('source', scs.map(s => `${sref(s)} ${s.name} : ${s.summary || ''}`).join
       $(d, '#sout').innerHTML = `<pre>${esc(y)}</pre>${notes ? `<p class="mut">${esc(notes)}</p>` : ''}
         <div class="bar"><button id="sadd" class="pri">${t('Ajouter aux règles (à valider)')}</button><button id="scopy">${t('Copier')}</button></div>`;
       $(d, '#scopy').onclick = () => navigator.clipboard?.writeText(y);
-      $(d, '#sadd').onclick = () => {
-        const techs = validate([id, ...extractTechniques(y)]).ok, P = new Set(techs.map(parentOf));
-        const rule = { id: uid(), name: (y.match(/^title\s*:\s*['"]?(.+?)['"]?\s*$/m)?.[1] || id).slice(0, 200), source: t('ébauche IA'), body: y, techniques: techs,
-          scenarios: state.scenarios.filter(s => s.techniques.some(x => P.has(parentOf(x)))).map(s => s.id), why: {}, reviewed: false, tags: extractTechniques(y), by: 'ia', tagDiff: null,
-          stage: '', confidence: 'low', note: t('Ébauche générée par l’IA pour combler un écart : à relire, tester et valider.') + (notes ? ' ' + notes : ''), mapped: true };
-        undoable(t('Règle « {name} » ajoutée (confiance basse, à valider dans Règles).', { name: rule.name }), () => { state.rules.push(rule); save(); render(root); });
-      };
+      // Ajout = mapping réel (même pipeline que l'onglet Règles : tags puis relecture IA), puis confiance basse forcée : une ébauche ne compte pas comme couverte avant validation.
+      $(d, '#sadd').onclick = () => run($(d, '#sst'), async (signal, say) => {
+        $(d, '#sadd').disabled = true;
+        const rule = { id: uid(), name: (y.match(/^title\s*:\s*['"]?(.+?)['"]?\s*$/m)?.[1] || id).slice(0, 200), source: t('ébauche IA'), body: y,
+          techniques: [], scenarios: [], why: {}, reviewed: false, tags: [...new Set([id, ...extractTechniques(y)])], tagDiff: null, stage: '', confidence: 'low', note: '', mapped: false };
+        let warn = '';
+        try { await mapRules([rule], { verify: true, signal, say }); }
+        catch (e) { if (e.name === 'AbortError') throw e; warn = t('Relecture IA impossible ({e}) : liens établis par les tags seulement.', { e: e.message }); }
+        if (!rule.techniques.includes(id)) rule.techniques = validate([id, ...rule.techniques]).ok; // la règle a été écrite pour cet écart
+        Object.assign(rule, { confidence: 'low', reviewed: false, note: [t('Ébauche générée par l’IA pour combler un écart : à relire, tester et valider.'), notes, rule.note].filter(Boolean).join(' ') });
+        const msg = t('Règle « {name} » ajoutée et mappée : {n} scénario(s) lié(s){stage} ; confiance basse jusqu’à validation dans Règles.', { name: rule.name, n: rule.scenarios.length, stage: rule.stage ? t(', étape {s}', { s: rule.stage }) : '' });
+        undoable(warn ? `${msg} ${warn}` : msg, () => { state.rules.push(rule); save(); render(root); });
+        draftDone(rule);
+        return msg;
+      });
       return t('Ébauche générée : relis-la avant de l’ajouter.');
     });
   }
@@ -208,6 +227,7 @@ ${fence('source', scs.map(s => `${sref(s)} ${s.name} : ${s.summary || ''}`).join
   $(root, '#gaps').onclick = e => { const b = e.target.closest('[data-draft]'); if (b) { opener = b; draft(b.dataset.draft); } };
   root.onkeydown = e => { if (e.key === 'Escape' && $(root, '#detail').classList.contains('open')) close(); };
   drawMatrix();
+  if (unmapped) $(root, '#gomap').onclick = () => document.querySelector('#tabs [data-id="rules"]')?.click();
   $(root, '#snap').onclick = () => {
     const label = prompt(t('Nom de l’instantané'), t('Instantané du {date}', { date: new Date().toLocaleDateString(locale) }));
     if (label === null) return;

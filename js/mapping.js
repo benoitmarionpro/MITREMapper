@@ -64,7 +64,42 @@ const flags = r => {
 const FILTERS = { all: t('Toutes'), todo: t('À relire'), suspect: t('Suspects'), miss: t('Oublis possibles'), none: t('Sans scénario'), wide: t('Trop larges'), low: t('Confiance basse'), diff: t('Divergence tags / IA') };
 const SYM = { ok: '●', suspect: '⚠', miss: '◌', '': '·' };
 const view = { q: '', f: 'all', hl: '', sel: null }; // état d'affichage conservé tant que la page est ouverte
+/** Ouvre une règle dans l'onglet Règles (volet de détail), filtres réinitialisés : à appeler avant d'afficher l'onglet. */
+export const focusRule = id => Object.assign(view, { sel: id, f: 'all', q: '', open: true });
 const scId = (ref, sc) => sc.find(s => s.ref === +String(ref).replace(/\D/g, ''))?.id;
+
+/** Pipeline de mapping unique (onglet Règles, ébauches Sigma) : tags d'abord, sans IA ; puis l'IA pour les règles sans tag,
+ *  ou pour toutes si verify. Modifie les règles reçues ; onBatch() après chaque étape (sauvegarde, affichage). */
+export async function mapRules(rules, { verify = false, signal, say = () => {}, onBatch = () => {} } = {}) {
+  const S = state.scenarios, n = +state.settings.batch || 8, todo = [];
+  let nTags = 0;
+  for (const r of rules) { // 1. déterministe d'abord : techniques déclarées dans la règle
+    const tags = tagsOf(r);
+    if (tags.length) { Object.assign(r, fromTags(r, tags, S)); nTags++; }
+    if (!tags.length || verify) todo.push(r);
+  }
+  onBatch();
+  if (!todo.length) return { nTags, nAI: 0, cut: 0 };
+  if (!isAuthorized()) throw new Error(t('{n} règle(s) mappée(s) depuis leurs tags. {m} règle(s) restante(s) nécessitent l’IA : coche l’autorisation dans Paramètres.', { n: nTags, m: todo.length }));
+  const system = SYSTEM(state.settings.stages, S);
+  for (let i = 0; i < todo.length; i += n) {
+    say(t('Lot {i}/{n}…', { i: i / n + 1, n: Math.ceil(todo.length / n) }));
+    const batch = todo.slice(i, i + n);
+    const user = batch.map((r, k) => `### i=${k}\n${fence('rule', `${r.name}\n${r.body.slice(0, MAX_RULE)}`)}`).join('\n\n');
+    const res = (await chatJson({ system, user, signal }));
+    for (const x of [res.results || res].flat()) { // sortie LLM = donnée non fiable : valeurs bornées
+      const r = batch[x?.i]; if (!r) continue;
+      const txt = (v, n) => typeof v === 'string' ? v.slice(0, n) : '';
+      const v = validate(Array.isArray(x.techniques) ? x.techniques.map(String) : []), links = (Array.isArray(x.scenarios) ? x.scenarios : []).map(e => typeof e === 'string' ? { s: e } : e || {})
+        .map(l => ({ id: scId(l.s, S), why: txt(l.why, 1000) })).filter(l => l.id); // ancien format (liste d'IDs) accepté
+      Object.assign(r, { techniques: v.ok, rejected: v.rejected, stage: state.settings.stages.includes(x.stage) ? x.stage : '', confidence: ['high', 'medium', 'low'].includes(x.confidence) ? x.confidence : 'medium',
+        note: txt(x.note, 2000), mapped: true, reviewed: false,
+        scenarios: links.map(l => l.id), why: Object.fromEntries(links.filter(l => l.why).map(l => [l.id, l.why])), by: 'ia', tagDiff: tagDiff(tagsOf(r), v.ok) });
+    }
+    onBatch();
+  }
+  return { nTags, nAI: todo.length, cut: todo.filter(r => r.body.length > MAX_RULE).length };
+}
 
 export function render(root) {
   root.innerHTML = `
@@ -177,40 +212,15 @@ export function render(root) {
     e.target.value = ''; save(); draw();
   };
   const go = all => run($(root, '#st'), async (signal, say) => {
-    const todo0 = state.rules.filter(r => all || !r.mapped), n = +state.settings.batch || 8, verify = $(root, '#verify').checked;
+    const todo0 = state.rules.filter(r => all || !r.mapped);
     if (!todo0.length) throw new Error(t('Rien à mapper.'));
-    const S = sc(), todo = [];
-    let nTags = 0;
-    for (const r of todo0) { // 1. déterministe d'abord : techniques déclarées dans la règle
-      const tags = tagsOf(r);
-      if (tags.length) { Object.assign(r, fromTags(r, tags, S)); nTags++; }
-      if (!tags.length || verify) todo.push(r);
-    }
-    save(); draw();
-    if (!todo.length) return t('{n} règle(s) mappée(s) depuis leurs tags, sans IA.', { n: nTags });
-    if (!isAuthorized()) throw new Error(t('{n} règle(s) mappée(s) depuis leurs tags. {m} règle(s) restante(s) nécessitent l’IA : coche l’autorisation dans Paramètres.', { n: nTags, m: todo.length }));
-    const system = SYSTEM(state.settings.stages, S);
-    for (let i = 0; i < todo.length; i += n) {
-      say(t('Lot {i}/{n}…', { i: i / n + 1, n: Math.ceil(todo.length / n) }));
-      const batch = todo.slice(i, i + n);
-      const user = batch.map((r, k) => `### i=${k}\n${fence('rule', `${r.name}\n${r.body.slice(0, MAX_RULE)}`)}`).join('\n\n');
-      const res = (await chatJson({ system, user, signal }));
-      for (const x of [res.results || res].flat()) { // sortie LLM = donnée non fiable : valeurs bornées
-        const r = batch[x?.i]; if (!r) continue;
-        const txt = (v, n) => typeof v === 'string' ? v.slice(0, n) : '';
-        const v = validate(Array.isArray(x.techniques) ? x.techniques.map(String) : []), links = (Array.isArray(x.scenarios) ? x.scenarios : []).map(e => typeof e === 'string' ? { s: e } : e || {})
-          .map(l => ({ id: scId(l.s, S), why: txt(l.why, 1000) })).filter(l => l.id); // ancien format (liste d'IDs) accepté
-        Object.assign(r, { techniques: v.ok, rejected: v.rejected, stage: state.settings.stages.includes(x.stage) ? x.stage : '', confidence: ['high', 'medium', 'low'].includes(x.confidence) ? x.confidence : 'medium',
-          note: txt(x.note, 2000), mapped: true, reviewed: false,
-          scenarios: links.map(l => l.id), why: Object.fromEntries(links.filter(l => l.why).map(l => [l.id, l.why])), by: 'ia', tagDiff: tagDiff(tagsOf(r), v.ok) });
-      }
-      save(); draw();
-    }
-    const cut = todo.filter(r => r.body.length > MAX_RULE).length;
-    return t('{n} règle(s) mappée(s) depuis leurs tags ; {m} règle(s) traitée(s) par l’IA.', { n: nTags, m: todo.length })
+    const { nTags, nAI, cut } = await mapRules(todo0, { verify: $(root, '#verify').checked, signal, say, onBatch: () => { save(); draw(); } });
+    if (!nAI) return t('{n} règle(s) mappée(s) depuis leurs tags, sans IA.', { n: nTags });
+    return t('{n} règle(s) mappée(s) depuis leurs tags ; {m} règle(s) traitée(s) par l’IA.', { n: nTags, m: nAI })
       + (cut ? ' ' + t('Attention : {k} règle(s) trop longue(s), seuls les {max} premiers caractères ont été analysés.', { k: cut, max: MAX_RULE }) : '');
   });
   $(root, '#map').onclick = () => go(false);
   $(root, '#remap').onclick = () => undoable(t('Remappage de toutes les règles lancé (les corrections manuelles seront remplacées).'), () => go(true));
   draw();
+  if (view.open && rule(view.sel)) { view.open = false; detail(); root.querySelector(`tr[data-id="${view.sel}"]`)?.scrollIntoView({ block: 'center' }); $(root, '#detail .x').focus(); } // focusRule()
 }

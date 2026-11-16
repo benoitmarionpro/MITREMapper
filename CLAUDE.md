@@ -62,7 +62,8 @@ Règle de couverture (`coverage.js`, `status(coverageMap(), id)`) : *couverte* s
 - Exports CSV : préfixer `'` les cellules commençant par `= + - @` (injection de formule).
 - Le référentiel ATT&CK évolue (v19 a scindé Defense Evasion en Stealth + Defense Impairment) : ne pas coder en dur la liste des tactiques, elle vient de `attack.json`. Les IDs révoqués (`attack.moved`) sont convertis par `validate()` / `current()`, et les projets enregistrés par `upgradeIds()` (au démarrage et dans `loadInto`). Le prompt reçoit le catalogue complet, sous-techniques comprises (`promptCatalog()`).
 - Citations CTI des scénarios (`evidence`) : vérifiées par `citeOk()` (`scenarios.js`) contre `state.cti`, jamais considérées comme fiables sans ce contrôle.
-- Ébauches Sigma (`coverage.js`, `draft()`) : toujours ajoutées en `confidence: 'low'`, `reviewed: false`, pour ne jamais compter comme couverture avant validation humaine.
+- Mapping : un seul pipeline, `mapRules(règles, { verify })` (`mapping.js` : tags puis IA), utilisé par l'onglet Règles et par l'ajout d'une ébauche ; ne pas dupliquer cette logique. Une règle non mappée n'entre pas dans la couverture : la page Couverture le signale.
+- Ébauches Sigma (`coverage.js`, `draft()`) : mappées par `mapRules(..., { verify: true })` à l'ajout, puis toujours forcées en `confidence: 'low'`, `reviewed: false`, pour ne jamais compter comme couverture avant validation humaine.
 - Démo et exemples bilingues : `sample(f)` charge `cti.en.txt` / `project.en.json` en anglais ; toute modification de `project.json` doit être reportée dans `project.en.json` (mêmes IDs et liens).
 - Vérifier après modification : `node --check js/*.js`, ouvrir `test.html`, tester sur l'exemple de `data/sample/`, régénérer `dist/mitremapper.html` et l'ouvrir en `file://`.
 

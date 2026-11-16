@@ -121,3 +121,4 @@ label.chk input{width:auto;min-height:0;margin-top:.2rem}
 .step.done .num{background:var(--green-50);color:var(--green-700)}.step.next{border-color:var(--acc);box-shadow:0 0 0 2px rgba(90,43,224,.15),var(--shadow)}.step.next .num{background:var(--acc);color:#fff}.step.wait{opacity:.75}
 .sugg{margin:.4rem 0}.sugg summary{cursor:pointer;color:var(--acc);font-size:13px;font-weight:600}.sugg button.tag{padding:1px 8px;border-radius:4px;font-size:12px;margin:2px}.sugg .tag small{color:var(--mut)}
 a.tag{text-decoration:none;margin:2px 2px 0 0;display:inline-block}a.tag:hover{text-decoration:underline}
+.card.warnc{border-color:var(--amber);background:var(--amber-bg)}

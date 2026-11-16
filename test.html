@@ -25,6 +25,13 @@ t('groupes : ID, alias et nom résolus, dédoublonnés ; inconnu rejeté', vg.ok
 const cti0 = 'Les attaquants utilisent des comptes valides achetés auprès d’initial access brokers.\nAprès l’accès : exécution PowerShell.';
 t('citation CTI : retrouvée malgré casse, espaces, apostrophes et « … »', citeOk('« les attaquants utilisent des comptes valides  achetés auprès d\'initial access brokers … exécution PowerShell »', cti0));
 t('citation CTI : reformulation détectée', !citeOk('Les attaquants achètent des comptes valides auprès de courtiers', cti0) && !citeOk('', cti0));
+const { mapRules } = await import('./js/mapping.js');
+const scM = state.scenarios, ruM = state.rules;
+state.scenarios = [{ id: 'm1', ref: 1, name: 'R', techniques: ['T1486'] }, { id: 'm2', ref: 2, name: 'X', techniques: ['T1003.001'] }];
+const rM = { id: 'r1', name: 'enc', body: 'title: enc\ntags:\n  - attack.t1486\ndetection: x', techniques: [], scenarios: [], mapped: false };
+const resM = await mapRules([rM], { verify: false });
+t('mapRules sans IA : tags → technique, scénario lié par technique commune, justification', resM.nTags === 1 && resM.nAI === 0 && rM.by === 'tags' && rM.mapped && rM.techniques.join() === 'T1486' && rM.scenarios.join() === 'm1' && /T1486/.test(rM.why.m1));
+state.scenarios = scM; state.rules = ruM;
 const { upgradeIds } = await import('./js/store.js');
 const up = upgradeIds({ scenarios: [{ techniques: ['T1562.001', 'T9999'] }], rules: [{ techniques: ['T1070.001'], tags: ['T1562.001'], tagDiff: { tags: ['T1562.001'], ia: [] } }], snapshots: [{ st: { 'T1562.001': 'gap' } }] });
 t('projet ancien : IDs révoqués migrés, ID inconnu conservé', up.scenarios[0].techniques.join() === 'T1685,T9999' && up.rules[0].techniques[0] === 'T1685.005' && up.rules[0].tagDiff.tags[0] === 'T1685' && 'T1685' in up.snapshots[0].st);
