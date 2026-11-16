@@ -1,7 +1,7 @@
 // Livrables client : rapport HTML imprimable (PDF), classeur Excel (.xlsx), couches ATT&CK Navigator.
 // Sans dépendance : le .xlsx et le .zip sont écrits ici (zip non compressé). A = analysis() de coverage.js.
 import { state, sref } from './store.js';
-import { attack, tech } from './attack.js';
+import { attack, tech, sourcesOf } from './attack.js';
 import { esc } from './ui.js';
 import { t, lang, locale } from './i18n.js';
 
@@ -11,6 +11,8 @@ const prio = p => PRIO[p] || p || '';
 const name = id => tech(id)?.name || '';
 const scName = id => state.scenarios.find(s => s.id === id);
 const yesNo = b => b ? t('oui') : t('non');
+const sgn = n => (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(n);
+const dcNames = id => sourcesOf(id).map(c => c.name).join(', ');
 const origin = r => r.by === 'tags' ? 'tags' : r.by === 'ia' ? t('IA') : '';
 
 /** Recommandation déterministe pour une technique de scénario non couverte. */
@@ -90,8 +92,10 @@ export function workbook(A) {
     [t('Scénarios')]: [[[t('Réf'), t('Scénario'), t('Priorité'), t('Acteurs'), t('Résumé'), t('Techniques'), t('Couvertes'), t('Partielles'), t('Écarts'), t('Couverture (%)'), t('Règles liées')],
       ...A.scen.map(({ s, c: n, pct }) => [sref(s), s.name, prio(s.priority), s.actors || '', s.summary || '', s.techniques.join(' '), n.cov, n.part, n.gap, pct,
         state.rules.filter(r => r.scenarios.includes(s.id)).length])], [6, 45, 10, 25, 60, 40, 11, 11, 8, 14, 12]],
-    [t('Écarts')]: [[[t('Technique'), t('Nom'), t('Statut'), t('Priorité'), t('Scénarios'), t('Recommandation')],
-      ...A.gaps.map(g => [g.id, g.name, LBL[g.k], prio(['high', 'medium', 'low'][g.p]), g.scs.map(sref).join(' '), reco(A, g)])], [12, 40, 10, 10, 22, 80]],
+    [t('Écarts')]: [[[t('Technique'), t('Nom'), t('Statut'), t('Priorité'), t('Scénarios'), t('Recommandation'), t('Sources de données (ATT&CK)')],
+      ...A.gaps.map(g => [g.id, g.name, LBL[g.k], prio(['high', 'medium', 'low'][g.p]), g.scs.map(sref).join(' '), reco(A, g), dcNames(g.id)])], [12, 40, 10, 10, 22, 80, 60]],
+    [t('Sources de données')]: [[[t('Composant'), t('Nom'), t('Écarts'), t('Priorité max.'), t('Techniques concernées')],
+      ...A.sources.map(c => [c.id, c.name, c.ids.length, prio(['high', 'medium', 'low'][c.p]), c.ids.join(' ')])], [12, 40, 9, 14, 80]],
     [t('Règles')]: [[[t('Règle'), t('Source'), t('Origine'), t('Techniques'), t('Scénarios'), t('Étape'), t('Confiance'), t('Validée'), t('Note')],
       ...state.rules.map(r => [r.name, r.source, origin(r), r.techniques.join(' '), refs(r.scenarios), r.stage || '', r.confidence || '', yesNo(r.reviewed), r.note || ''])],
       [45, 16, 9, 30, 22, 14, 11, 9, 70]],
@@ -101,6 +105,10 @@ export function workbook(A) {
         return [x.id, x.name, x.tactics.join(', '), k === 'gap' && !rel.has(x.id) ? '' : LBL[k], yesNo(rel.has(x.id)), e ? e.n : 0, e ? e.rules.join('; ') : ''];
       })], [12, 40, 30, 10, 16, 10, 80]],
   };
+  const D = A.diff;
+  if (D) sheets[t('Évolution')] = [[[t('Technique'), t('Nom'), t('Avant ({label})', { label: D.snap.label }), t('Maintenant')],
+    ...[...D.better, ...D.worse].map(x => [x.id, name(x.id), LBL[x.from], LBL[x.to]]),
+    ...D.added.map(id => [id, name(id), t('hors périmètre'), LBL[A.status(id)]]), ...D.removed.map(id => [id, name(id), LBL[D.snap.st[id]], t('hors périmètre')])], [12, 40, 22, 14]];
   const names = Object.keys(sheets), ns = 'http://schemas.openxmlformats.org/';
   const files = {
     '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="${ns}package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${names.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`,
@@ -155,6 +163,9 @@ tr{break-inside:avoid}.ref{display:inline-block;background:var(--ind);color:#fff
 <div class="kpis">${kpi(A.pct + ' %', t('des techniques des scénarios couvertes'), 'cov')}${kpi(state.scenarios.length, t('scénarios de menace'))}${kpi(state.rules.length, t('règles analysées ({n} validées)', { n: validated }))}${kpi(A.tot.cov, t('techniques couvertes'), 'cov')}${kpi(A.tot.part, t('techniques partielles'), 'part')}${kpi(A.tot.gap, t('écarts de détection'), 'gap')}</div>
 <p>${t('Sur les {n} techniques ATT&amp;CK mobilisées par les {s} scénarios retenus{assets}, {cov} sont couvertes par au moins une règle fiable, {part} le sont partiellement et {gap} ne disposent d’aucune détection.', { n: A.nTech, s: state.scenarios.length, assets: c.assets ? t(' (actifs clés : {a})', { a: esc(c.assets) }) : '', cov: A.tot.cov, part: A.tot.part, gap: A.tot.gap })}${A.gaps.length ? ' ' + t('Les {n} actions prioritaires portent sur {list}.', { n: Math.min(5, A.gaps.length), list: A.gaps.slice(0, 5).map(g => `${g.id} (${esc(g.name)})`).join(', ') }) : ''}</p>
 
+${A.diff ? (D => `<h2>${t('Évolution depuis « {label} » ({date})', { label: esc(D.snap.label), date: new Date(D.snap.date).toLocaleDateString(locale) })}</h2>
+<div class="kpis">${kpi(`${D.snap.pct} → ${A.pct} %`, t('couverture ({d} pts)', { d: sgn(D.dPct) }), D.dPct >= 0 ? 'cov' : 'gap')}${kpi(sgn(D.dCov), t('techniques couvertes'), 'cov')}${kpi(sgn(D.dGap), t('écarts de détection'), 'gap')}${kpi(D.better.length, t('techniques améliorées'))}${kpi(D.worse.length, t('techniques dégradées'), D.worse.length ? 'gap' : '')}</div>
+${D.better.length || D.worse.length ? `<table><thead><tr><th>${t('Technique')}</th><th>${t('Avant')}</th><th>${t('Maintenant')}</th></tr></thead><tbody>${[...D.better, ...D.worse].map(x => `<tr><td><b>${x.id}</b> ${esc(name(x.id))}</td><td class="st ${x.from}">${LBL[x.from]}</td><td class="st ${x.to}">${LBL[x.to]}</td></tr>`).join('')}</tbody></table>` : ''}`)(A.diff) : ''}
 <h2>${t('Couverture par scénario')}</h2>
 <table><thead><tr><th>${t('Réf')}</th><th>${t('Scénario')}</th><th>${t('Priorité')}</th><th>${t('Couverture')}</th><th></th><th>${t('Détail')}</th></tr></thead><tbody>
 ${A.scen.map(({ s, c: n, pct }) => `<tr><td><span class="ref">${sref(s)}</span></td><td><b>${esc(s.name)}</b>${s.actors ? `<div class="mut">${esc(s.actors)}</div>` : ''}</td><td>${prio(s.priority)}</td><td>${bar(n)}</td><td><b>${pct} %</b></td><td class="mut">${t('{c} couvertes, {p} partielles, {g} écarts', { c: n.cov, p: n.part, g: n.gap })}</td></tr>`).join('')}
@@ -164,6 +175,12 @@ ${A.scen.map(({ s, c: n, pct }) => `<tr><td><span class="ref">${sref(s)}</span><
 ${A.gaps.length ? `<table><thead><tr><th>${t('Technique')}</th><th>${t('Statut')}</th><th>${t('Priorité')}</th><th>${t('Scénarios')}</th><th>${t('Recommandation')}</th></tr></thead><tbody>
 ${A.gaps.map(g => `<tr><td><b>${g.id}</b> ${esc(g.name)}</td><td class="st ${g.k}">${LBL[g.k]}</td><td>${prio(['high', 'medium', 'low'][g.p])}</td><td>${g.scs.map(s => `<span class="ref" title="${esc(s.name)}">${sref(s)}</span>`).join(' ')}</td><td>${esc(reco(A, g))}</td></tr>`).join('')}
 </tbody></table>` : `<p>${t('Aucun écart : toutes les techniques des scénarios sont couvertes.')}</p>`}
+
+${A.sources.length ? `<h2>${t('Sources de données à prioriser')}</h2>
+<p class="mut">${t('Composants de données MITRE ATT&amp;CK nécessaires pour détecter les écarts, classés par nombre d’écarts et priorité des scénarios. À confronter aux journaux réellement collectés.')}</p>
+<table><thead><tr><th>${t('Composant de données')}</th><th>${t('Écarts')}</th><th>${t('Priorité max.')}</th><th>${t('Techniques concernées')}</th></tr></thead><tbody>
+${A.sources.slice(0, 15).map(c => `<tr><td><b>${esc(c.name)}</b> <span class="mut">${c.id}</span></td><td>${c.ids.length}</td><td>${prio(['high', 'medium', 'low'][c.p])}</td><td>${c.ids.join(', ')}</td></tr>`).join('')}
+</tbody></table>` : ''}
 
 <section class="pg-matrix"><h2>${t('Matrice ATT&amp;CK')}</h2>
 <p class="legend"><span><i style="background:var(--cov)"></i>${t('Couvert')}</span><span><i style="background:var(--partb);border:1px solid var(--part)"></i>${t('Partiel')}</span><span><i style="background:var(--gapb);border:1px solid var(--gap)"></i>${t('Écart (technique d’un scénario)')}</span><span><i style="background:#fff;box-shadow:inset 3px 0 0 var(--ind);border:1px solid var(--line)"></i>${t('Technique d’un scénario')}</span></p>

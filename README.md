@@ -69,13 +69,15 @@ La **revue du mapping** est une matrice règles × scénarios (S1…Sn, nom au s
 
 ## 4. Couverture
 
-- **Matrice ATT&CK** : vert = couvert, ambre = partiel, rouge = écart (technique d'un scénario sans règle), barre colorée à gauche = technique présente dans un scénario, ×n = nombre de règles. Les en-têtes de tactiques restent visibles au défilement et affichent « couvertes/total » pour les scénarios. Recherche par ID ou nom, filtre par scénario, filtre par statut (techniques des scénarios, écarts, couvertes). Un clic sur une technique ouvre un volet avec ses règles, ses scénarios et ses sous-techniques ; Échap le ferme.
+- **Matrice ATT&CK** : vert = couvert, ambre = partiel, rouge = écart (technique d'un scénario sans règle), barre colorée à gauche = technique présente dans un scénario, ×n = nombre de règles. Les en-têtes de tactiques restent visibles au défilement et affichent « couvertes/total » pour les scénarios. Recherche par ID ou nom, filtre par scénario, filtre par statut (techniques des scénarios, écarts, couvertes). Un clic sur une technique ouvre un volet avec ses règles, ses scénarios, ses sources de données ATT&CK et ses sous-techniques ; Échap le ferme.
 - **Statuts** : *couvert* = règle de confiance ≥ medium sur la technique elle-même, ou toutes ses sous-techniques couvertes ; *partiel* = seulement certaines sous-techniques couvertes (le volet de détail indique « n/N couvertes »), confiance basse, ou pour une sous-technique seule sa parente est couverte ; *écart* = aucune règle.
 - **Couverture par scénario** : pourcentage de techniques couvertes, partielles et en écart.
-- **Écarts priorisés** par priorité de scénario.
+- **Évolution** : **Figer un instantané** (par exemple avant un atelier) enregistre l'état de la couverture dans le projet ; la page compare ensuite l'état courant au dernier instantané (ou à celui choisi) : couverture avant → après, techniques améliorées ou dégradées, progression par scénario. La comparaison est reprise dans le rapport et le classeur.
+- **Écarts priorisés** par priorité de scénario, avec les sources de données ATT&CK qui permettraient de les détecter.
+- **Sources de données à prioriser** : composants de données ATT&CK (Process Creation, Command Execution…, issus des stratégies de détection MITRE) classés par nombre d'écarts qu'ils aident à couvrir et priorité des scénarios. À confronter aux journaux réellement collectés chez le client.
 - **Livrables** :
-  - **Rapport client (PDF)** : ouvre un rapport aux couleurs Wavestone dans un nouvel onglet, à imprimer en PDF (bouton « Imprimer / PDF ») ; **Rapport (HTML)** le télécharge. Contenu : synthèse chiffrée, couverture par scénario, écarts prioritaires avec recommandation, matrice ATT&CK (page paysage), inventaire des règles, méthode et limites.
-  - **Classeur Excel** (.xlsx, généré localement) : onglets Synthèse, Scénarios, Écarts (avec recommandations), Règles, Techniques.
+  - **Rapport client (PDF)** : ouvre un rapport aux couleurs Wavestone dans un nouvel onglet, à imprimer en PDF (bouton « Imprimer / PDF ») ; **Rapport (HTML)** le télécharge. Contenu : synthèse chiffrée, évolution depuis l'instantané comparé (s'il y en a un), couverture par scénario, écarts prioritaires avec recommandation, sources de données à prioriser, matrice ATT&CK (page paysage), inventaire des règles, méthode et limites.
+  - **Classeur Excel** (.xlsx, généré localement) : onglets Synthèse, Scénarios, Écarts (avec recommandations et sources de données), Sources de données, Règles, Techniques, et Évolution si un instantané est comparé.
   - **Couche Navigator** : couche globale, ou celle du scénario sélectionné dans le filtre (3 couvert, 2 partiel, 1 écart) ; **Couches Navigator par scénario (.zip)** : la couche globale et une couche par scénario.
   - **CSV** des règles.
 
@@ -103,7 +105,7 @@ Les fichiers sont dans `data/sample/` (`cti.txt`, `rules.yml`, `project.json`).
 
 ## Mettre à jour le référentiel ATT&CK
 
-`node tools/build-attack.mjs` régénère `data/attack.json` (ATT&CK Enterprise, dernière version publiée).
+`node tools/build-attack.mjs [version]` régénère `data/attack.json` (ATT&CK Enterprise, version 19.2 par défaut : changer de version est un choix explicite, car les identifiants évoluent d'une version à l'autre). Le fichier contient les techniques, les tactiques et, pour chaque technique, les composants de données de ses stratégies de détection MITRE.
 
 ## Limites
 

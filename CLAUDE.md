@@ -29,8 +29,8 @@ Le LLM fait le gros du travail ; l'utilisateur relit et corrige. Les IDs ATT&CK 
 | `js/settings.js` | Configuration LLM, étapes de stratégie, import/export projet |
 | `js/i18n.js` | `t()`, `lang`, `locale`, `setLang`, dictionnaire `EN` |
 | `js/ui.js` | Helpers (`esc`, `run` avec annulation, lecture de fichiers) |
-| `data/attack.json` | Référentiel ATT&CK Enterprise compact, **généré** |
-| `tools/build-attack.mjs` | Régénère `data/attack.json` depuis le STIX officiel (`node tools/build-attack.mjs`) |
+| `data/attack.json` | Référentiel ATT&CK Enterprise compact, **généré** : `techniques[{id,name,tactics,dc[]}]` (`dc` = index dans `components[{id:'DC0032',name}]`, composants de données des stratégies de détection MITRE ; lire via `sourcesOf()`) |
+| `tools/build-attack.mjs` | Régénère `data/attack.json` depuis le STIX officiel (`node tools/build-attack.mjs [version] [stix-local]`, version figée à 19.2 par défaut : monter de version est une décision explicite) |
 | `tools/build-standalone.mjs` | Génère `dist/mitremapper.html`, fichier unique sans serveur (mini-bundler : un module = une fonction ; ne pas utiliser de `export` hors `export const/let/function/class NOM` en début de ligne ni de live binding, ex. `attack` est un objet partagé) |
 | `data/sample/` | CTI, règles Sigma et `project.json` (démo complète déjà mappée, chargée par `loadDemo()` dans `store.js`) |
 | `test.html` | Tests (parse JSON, IDs, tags, liens, CYBAIMaker, couverture, références) : ouvrir via le serveur local ; met `document.title` à `PASS n` / `FAIL n` ; sauvegarde et restaure le localStorage |
@@ -38,7 +38,7 @@ Le LLM fait le gros du travail ; l'utilisateur relit et corrige. Les IDs ATT&CK 
 | `fonts/` | Inter et Poppins (woff2, SIL OFL 1.1), inlinées en data URI dans `dist/` |
 
 ## Modèle de données
-`{pid, name, nextRef, client, cti, scenarios[{id,ref,name,priority,techniques[],summary,actors}], rules[{id,name,source,body,techniques[],scenarios[ids],why{scenarioId:phrase},reviewed,tags[],by:'tags'|'ia',tagDiff{tags[],ia[]}|null,stage,confidence,note,mapped}], settings}`
+`{pid, name, nextRef, client, cti, snapshots[{id,date,label,pct,nTech,tot,st{techId:cov|part|gap},scen[{ref,name,pct}]}], scenarios[{id,ref,name,priority,techniques[],summary,actors}], rules[{id,name,source,body,techniques[],scenarios[ids],why{scenarioId:phrase},reviewed,tags[],by:'tags'|'ia',tagDiff{tags[],ia[]}|null,stage,confidence,note,mapped}], settings}`
 
 Projets (`store.js`) : projet courant + réglages dans `mitremapper.v1` ; bibliothèque dans `mitremapper.lib` (index) et `mitremapper.lib.<pid>` (données sans réglages), synchronisée à chaque `save()`. `state` est un objet unique jamais réassigné (`loadInto` le vide puis le remplit). Références de scénarios stables : `s.ref` attribué par `save()` (`nextRef`, jamais réutilisé ; renumérotation depuis S1 si aucun scénario n'a de ref) ; toujours afficher via `sref(s)`, jamais par l'index.
 
@@ -47,6 +47,8 @@ Revue du mapping (`mapping.js`) : `linkState(règle, scénario)` → `ok` (lié,
 Mapping déterministe d'abord (`mapping.js`) : `extractTechniques(body)` lit les IDs ATT&CK déclarés (tags Sigma, champs MITRE des exports) et les valide ; une règle taguée est mappée sans IA (`by: 'tags'`, scénarios liés par technique commune). L'IA ne traite que les règles sans tag, ou toutes si l'option de vérification est cochée (`tagDiff` = divergence au niveau technique parente entre tags et lecture IA).
 
 Règle de couverture (`coverage.js`, `status(coverageMap(), id)`) : *couverte* si une règle de confiance ≥ medium cite la technique elle-même, ou si toutes ses sous-techniques sont couvertes ; *partielle* si seulement certaines sous-techniques, confiance `low`, ou (sous-technique) seule la parente est couverte ; sinon *écart*.
+
+`analysis()` renvoie aussi `sources` (composants de données ATT&CK des écarts, pondérés par priorité de scénario) et `diff` (`compare()` avec l'instantané choisi dans la page, `view.cmp` : `''` = dernier, `'none'` = aucun), repris par le rapport et le classeur. Instantanés : `snapshot(A, label)`, rapprochés des scénarios par `ref`.
 
 ## Conventions
 - Interface bilingue (`js/i18n.js`) : tout texte affiché passe par `t('texte français', { var })` (clé = français, `{var}` pour les variables, apostrophe typographique ’ dans les clés) et doit avoir son entrée dans `EN` (vérifié par `test.html`). Langue mémorisée dans `localStorage` (`mitremapper.lang`), changement = rechargement. Prompts en français, avec consigne de rédiger en anglais si `lang === 'en'`. Les noms de techniques restent ceux de MITRE.

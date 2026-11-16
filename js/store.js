@@ -8,7 +8,7 @@ export const uid = () => Math.random().toString(36).slice(2, 9);
 const fresh = () => ({
   pid: uid(), name: t('Projet sans nom'), nextRef: 1,
   client: { sector: '', size: '', country: '', assets: '' },
-  cti: '', scenarios: [], rules: [],
+  cti: '', scenarios: [], rules: [], snapshots: [],
   settings: { provider: 'local', base: 'http://127.0.0.1:11434/v1', model: 'auto', deployment: '', apiVersion: '2024-10-21', temperature: 0.2, batch: 8, stages: DEFAULT_STAGES },
 });
 export const state = fresh();
@@ -106,10 +106,17 @@ export function sanitize(d) {
       stage: str(r.stage, 100), confidence: one(r.confidence, ['high', 'medium', 'low', ''], 'low'), note: str(r.note, 2000), mapped: r.mapped === true,
     };
   });
+  const num = v => Number.isFinite(v) ? Math.max(0, Math.min(v, 1e6)) : 0, K = ['cov', 'part', 'gap'];
+  const snapshots = (Array.isArray(d.snapshots) ? d.snapshots : []).filter(x => x && typeof x === 'object' && x.st && typeof x.st === 'object').slice(-50).map(x => ({
+    id: uid(), date: isNaN(Date.parse(x.date)) ? new Date().toISOString() : new Date(x.date).toISOString(), label: str(x.label, 100), pct: num(x.pct), nTech: num(x.nTech),
+    tot: Object.fromEntries(K.map(k => [k, num(x.tot?.[k])])),
+    st: Object.fromEntries(Object.entries(x.st).filter(([id, k]) => K.includes(k) && techs([id]).length).map(([id, k]) => [techs([id])[0], k])),
+    scen: (Array.isArray(x.scen) ? x.scen : []).filter(s => s && Number.isInteger(s.ref)).map(s => ({ ref: s.ref, name: str(s.name, 300), pct: num(s.pct) })),
+  }));
   const c = d.client && typeof d.client === 'object' ? d.client : {};
   return {
     name: str(d.name, 200), nextRef: Number.isInteger(d.nextRef) && d.nextRef > 0 ? d.nextRef : 1, cti: str(d.cti, 2000000),
-    client: Object.fromEntries(['sector', 'size', 'country', 'assets'].map(k => [k, str(c[k], 500)])), scenarios, rules,
+    client: Object.fromEntries(['sector', 'size', 'country', 'assets'].map(k => [k, str(c[k], 500)])), scenarios, rules, snapshots,
   };
 }
 export function importProject(text, name) {

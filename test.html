@@ -89,6 +89,13 @@ state.rules = [{ name: 'r', techniques: ['T1059.001', 'T1490'], confidence: 'hig
 const A = analysis();
 t('analyse : 1 couvert, 1 partiel, 1 écart, 33 %', A.tot.cov === 1 && A.tot.part === 1 && A.tot.gap === 1 && A.pct === 33);
 t('couche Navigator du scénario (scores partiel 2, couvert 3, écart 1)', layer(A, state.scenarios[0]).techniques.map(x => x.score).join() === '2,3,1');
+const { sourcesOf } = await import('./js/attack.js'), { snapshot, compare } = await import('./js/coverage.js');
+t('sources de données : sous-technique avec stratégie propre, sinon parente', sourcesOf('T1059.001').some(c => c.id === 'DC0032') && sourcesOf('T1003.001').length > 0);
+t('sources à prioriser : issues des écarts, poids = priorité', A.sources.length > 0 && A.sources.every(c => c.ids.every(id => ['T1059', 'T1003.001'].includes(id))) && A.sources[0].w >= A.sources.at(-1).w);
+const snap0 = snapshot(A, 'avant');
+state.rules = [...state.rules, { name: 'r2', techniques: ['T1003.001'], confidence: 'high', scenarios: [] }];
+const D = compare(analysis(), snap0);
+t('évolution : écart → couvert détecté, +1 couverte, +33 pts', D.better.length === 1 && D.better[0].id === 'T1003.001' && D.better[0].from === 'gap' && D.dCov === 1 && D.dPct === 34 && !D.worse.length);
 state.scenarios = sc1; state.rules = ru1;
 const zb = new Uint8Array(await zip({ 'a.txt': 'abc' }).arrayBuffer());
 t('zip : en-tête local et fin de répertoire central', zb[0] === 0x50 && zb[1] === 0x4b && zb[2] === 3 && new DataView(zb.buffer).getUint32(zb.length - 22, true) === 0x06054b50);

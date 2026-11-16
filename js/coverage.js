@@ -1,8 +1,8 @@
-import { state, exportJson, download, loadDemo, sref } from './store.js';
-import { attack, parentOf, tech } from './attack.js';
+import { state, save, exportJson, download, loadDemo, sref, uid } from './store.js';
+import { attack, parentOf, tech, sourcesOf } from './attack.js';
 import { reportHtml, workbook, layer, layersZip } from './export.js';
-import { esc, $, showProject } from './ui.js';
-import { t } from './i18n.js';
+import { esc, $, showProject, undoable } from './ui.js';
+import { t, locale } from './i18n.js';
 
 const RANK = { low: 1, medium: 2, high: 3 };
 /** id -> {n, best, exact, rules[], items[]} : une règle sur une sous-technique compte aussi pour la parente ;
@@ -32,7 +32,7 @@ export function status(cm, id) {
   return subs.length && subs.every(s => (cm.get(s)?.exact || 0) >= 2) ? 'cov' : 'part';
 }
 export const LABEL = { cov: t('couvert'), part: t('partiel'), gap: t('écart') };
-const PRIO = { high: 0, medium: 1, low: 2 };
+const PRIO = { high: 0, medium: 1, low: 2 }, PRIOL = [t('Haute'), t('Moyenne'), t('Basse')];
 /** Analyse partagée par l'écran et les exports : statuts par scénario, écarts priorisés, totaux. */
 export function analysis() {
   const cm = coverageMap();
@@ -49,10 +49,34 @@ export function analysis() {
   const gaps = [...g.values()].sort((a, b) => a.p - b.p || (b.k === 'gap') - (a.k === 'gap') || b.scs.length - a.scs.length);
   const uniq = new Map(scen.flatMap(x => x.st)), tot = { cov: 0, part: 0, gap: 0 };
   uniq.forEach(k => tot[k]++);
-  return { cm, status: id => status(cm, id), scen, gaps, tot, nTech: uniq.size, pct: uniq.size ? Math.round(100 * tot.cov / uniq.size) : 0 };
+  const A = { cm, status: id => status(cm, id), scen, gaps, tot, nTech: uniq.size, pct: uniq.size ? Math.round(100 * tot.cov / uniq.size) : 0, sources: sourcesFor(gaps) };
+  const snap = state.snapshots?.find(x => x.id === view.cmp) || (view.cmp === '' ? state.snapshots?.at(-1) : null);
+  return Object.assign(A, { diff: snap ? compare(A, snap) : null });
 }
+/** Composants de données ATT&CK à prioriser : ceux qui servent au plus d'écarts, pondérés par la priorité des scénarios (high 3, medium 2, low 1). */
+function sourcesFor(gaps) {
+  const m = new Map();
+  for (const g of gaps) for (const c of sourcesOf(g.id)) {
+    const x = m.get(c.id) || { ...c, ids: [], p: 3, w: 0 };
+    x.ids.push(g.id); x.p = Math.min(x.p, g.p); x.w += 3 - g.p; m.set(c.id, x);
+  }
+  return [...m.values()].sort((a, b) => b.w - a.w || b.ids.length - a.ids.length || a.id.localeCompare(b.id));
+}
+/** Instantané figé de la couverture (statut de chaque technique de scénario) pour mesurer l'évolution. */
+export const snapshot = (A, label) => ({ id: uid(), date: new Date().toISOString(), label, pct: A.pct, tot: { ...A.tot }, nTech: A.nTech,
+  st: Object.fromEntries(A.scen.flatMap(x => x.st)), scen: A.scen.map(({ s, pct }) => ({ ref: s.ref, name: s.name, pct })) });
+const RK = { gap: 0, part: 1, cov: 2 };
+/** Différence entre un instantané et l'état courant (techniques améliorées, dégradées, entrées ou sorties du périmètre, scénarios). */
+export function compare(A, snap) {
+  const now = new Map(A.scen.flatMap(x => x.st)), before = new Map(Object.entries(snap.st)), both = [...now.keys()].filter(id => before.has(id));
+  const moved = dir => both.filter(id => dir * (RK[now.get(id)] - RK[before.get(id)]) > 0).map(id => ({ id, from: before.get(id), to: now.get(id) }));
+  return { snap, dPct: A.pct - snap.pct, dCov: A.tot.cov - snap.tot.cov, dGap: A.tot.gap - snap.tot.gap, better: moved(1), worse: moved(-1),
+    added: [...now.keys()].filter(id => !before.has(id)), removed: [...before.keys()].filter(id => !now.has(id)),
+    scen: new Map(A.scen.map(({ s }) => [s.id, snap.scen.find(x => x.ref === s.ref)?.pct])) };
+}
+export const signed = n => (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(n);
 const SHOW = { all: t('Toutes les techniques'), scenario: t('Techniques des scénarios'), gap: t('Écarts uniquement'), cov: t('Couvertes uniquement') };
-const view = { q: '', sc: '', show: 'all' }; // filtres conservés tant que la page est ouverte
+const view = { q: '', sc: '', show: 'all', cmp: '' }; // filtres conservés tant que la page est ouverte ; cmp : '' = dernier instantané, 'none' = sans comparaison
 
 export function render(root) {
   const cm = coverageMap();
@@ -60,11 +84,21 @@ export function render(root) {
   const relSet = () => new Set(state.scenarios.filter(s => !view.sc || s.id === view.sc).flatMap(s => s.techniques.map(parentOf)));
   const kind = (te, rel) => { const k = status(cm, te.id); return k === 'gap' ? (rel.has(te.id) ? 'gap' : 'none') : k; };
 
-  const A = analysis(), total = A.nTech;
+  const A = analysis(), total = A.nTech, D = A.diff;
+  const delta = (n, unit = '') => n ? ` <span class="${n > 0 ? 'ok' : 'err'}">(${signed(n)}${unit})</span>` : '';
   const rowsHtml = A.scen.map(({ s, st, c, pct }) => `<tr><td><b class="tag sref">${sref(s)}</b> <b>${esc(s.name)}</b> <span class="tag">${esc(s.priority)}</span></td>
-      <td>${pct}% <span class="mut">(${t('{c} couvertes, {p} partielles, {g} écarts', { c: c.cov, p: c.part, g: c.gap })})</span></td>
+      <td>${pct}%${D ? (D.scen.get(s.id) == null ? ` <span class="mut">(${t('nouveau')})</span>` : delta(pct - D.scen.get(s.id), ' pts')) : ''} <span class="mut">(${t('{c} couvertes, {p} partielles, {g} écarts', { c: c.cov, p: c.part, g: c.gap })})</span></td>
       <td>${st.map(([id, k]) => `<span class="tag ${k}" title="${esc(tech(id)?.name)}">${id}</span>`).join('')}</td></tr>`).join('');
-  const gapRows = A.gaps.map(g => `<tr><td>${g.id} ${esc(g.name)}</td><td class="${g.k}">${LABEL[g.k]}</td><td>${g.scs.map(s => `<div><span class="tag sref">${sref(s)}</span> ${esc(s.name)}</div>`).join('')}</td></tr>`).join('');
+  const dcs = id => sourcesOf(id).map(c => esc(c.name)).join(', ') || '<span class="mut">—</span>';
+  const gapRows = A.gaps.map(g => `<tr><td>${g.id} ${esc(g.name)}</td><td class="${g.k}">${LABEL[g.k]}</td><td>${g.scs.map(s => `<div><span class="tag sref">${sref(s)}</span> ${esc(s.name)}</div>`).join('')}</td><td class="mut">${dcs(g.id)}</td></tr>`).join('');
+  const srcRows = A.sources.slice(0, 15).map(c => `<tr><td><a href="https://attack.mitre.org/datacomponents/${c.id}/" target="_blank" rel="noopener">${c.id}</a> <b>${esc(c.name)}</b></td><td>${c.ids.length}</td><td>${PRIOL[c.p]}</td><td>${c.ids.map(id => `<span class="tag" title="${esc(tech(id)?.name)}">${id}</span>`).join('')}</td></tr>`).join('');
+  const snaps = state.snapshots || [], fmt = d => new Date(d).toLocaleDateString(locale);
+  const ids = (list, f) => list.map(x => `<span class="tag ${x.to || ''}" title="${esc(tech(x.id || x)?.name)}">${x.id || x}${f ? ` <small>${LABEL[x.from]} → ${LABEL[x.to]}</small>` : ''}</span>`).join('') || `<span class="mut">${t('Aucune.')}</span>`;
+  const evo = !snaps.length ? `<p class="mut">${t('Fige un instantané (par exemple avant un atelier ou une campagne de création de règles) pour mesurer ensuite les progrès et les inclure dans le rapport.')}</p>`
+    : !D ? '' : `<div class="kpis"><div class="kpi"><b>${D.snap.pct}% → ${A.pct}%</b><span>${t('couverture')}${delta(D.dPct, ' pts')}</span></div>
+      <div class="kpi"><b>${signed(D.dCov)}</b><span>${t('techniques couvertes')}</span></div><div class="kpi"><b>${signed(D.dGap)}</b><span>${t('écarts')}</span></div></div>
+      <p><b>${t('Améliorées')} (${D.better.length})</b> ${ids(D.better, true)}</p><p><b>${t('Dégradées')} (${D.worse.length})</b> ${ids(D.worse, true)}</p>
+      ${D.added.length || D.removed.length ? `<p class="mut">${t('Périmètre : {a} technique(s) ajoutée(s), {r} retirée(s) depuis l’instantané.', { a: D.added.length, r: D.removed.length })}</p>` : ''}`;
 
   root.innerHTML = `${state.rules.length || state.scenarios.length ? '' : `<div class="card"><b>${t('Aucune donnée.')}</b> ${t('Génère des scénarios et mappe des règles, ou')} <button id="demo" class="pri">${t('charge la démo complète')}</button></div>`}
   <div class="bar"><button id="rep" class="pri">${t('Rapport client (PDF)')}</button><button id="reph">${t('Rapport (HTML)')}</button><button id="xlsx">${t('Classeur Excel')}</button><button id="nav">${t('Couche Navigator')}</button><button id="navz">${t('Couches Navigator par scénario (.zip)')}</button><button id="csv">${t('CSV (règles)')}</button>
@@ -77,8 +111,13 @@ export function render(root) {
     <span id="legend"></span>
   </div>
   <div id="matrix" class="matrix"></div><aside id="detail" role="region" aria-label="${t('Détail de la technique')}"></aside>
+  <h2>${t('Évolution')}</h2>
+  <div class="bar"><button id="snap">${t('Figer un instantané')}</button>${snaps.length ? `<label for="cmp" style="margin:0">${t('Comparer avec')}</label><select id="cmp" style="width:auto"><option value="none">${t('Aucune comparaison')}</option>${snaps.map(x => `<option value="${x.id}" ${D?.snap === x ? 'selected' : ''}>${esc(x.label)} (${fmt(x.date)}, ${x.pct}%)</option>`).join('')}</select><button id="snapdel" ${D ? '' : 'disabled'}>${t('Supprimer cet instantané')}</button>` : ''}</div>
+  ${evo}
   <h2>${t('Couverture par scénario')}</h2><table><thead><tr><th>${t('Scénario')}</th><th>${t('Couverture')}</th><th>${t('Techniques')}</th></tr></thead><tbody>${rowsHtml || `<tr><td colspan=3 class="mut">${t('Aucun scénario')}</td></tr>`}</tbody></table>
-  <h2>${t('Écarts priorisés')}</h2><table><thead><tr><th>${t('Technique')}</th><th>${t('Statut')}</th><th>${t('Scénarios concernés')}</th></tr></thead><tbody>${gapRows || `<tr><td colspan=3 class="mut">${t('Aucun écart')}</td></tr>`}</tbody></table>`;
+  <h2>${t('Écarts priorisés')}</h2><table><thead><tr><th>${t('Technique')}</th><th>${t('Statut')}</th><th>${t('Scénarios concernés')}</th><th>${t('Sources de données (ATT&CK)')}</th></tr></thead><tbody>${gapRows || `<tr><td colspan=4 class="mut">${t('Aucun écart')}</td></tr>`}</tbody></table>
+  ${srcRows ? `<h2>${t('Sources de données à prioriser')}</h2><p class="mut">${t('Composants de données ATT&CK nécessaires pour détecter les écarts, classés par nombre d’écarts et priorité des scénarios. À confronter aux journaux réellement collectés.')}</p>
+  <table><thead><tr><th>${t('Composant de données')}</th><th>${t('Écarts')}</th><th>${t('Priorité max.')}</th><th>${t('Techniques concernées')}</th></tr></thead><tbody>${srcRows}</tbody></table>` : ''}`;
 
   function drawMatrix() {
     const rel = relSet(), q = view.q.trim().toLowerCase(), n = { cov: 0, part: 0, gap: 0 };
@@ -110,7 +149,7 @@ export function render(root) {
     const d = $(root, '#detail');
     d.innerHTML = `<button class="x" aria-label="${t('Fermer')}">×</button><h3>${id} ${esc(te.name)}</h3>
       <p><span class="tag ${st[0]}">${st[1]}</span> <a href="https://attack.mitre.org/techniques/${id}/" target="_blank" rel="noopener">${t('Fiche MITRE')}</a></p>
-      <h4>${t('Règles')} (${e ? e.items.length : 0})</h4>${rules}<h4>${t('Scénarios')} (${scs.length})</h4>${scn}<h4>${t('Sous-techniques ({n}/{m} couvertes)', { n: subs.filter(x => (cm.get(x.id)?.exact || 0) >= 2).length, m: subs.length })}</h4>${sub}`;
+      <h4>${t('Règles')} (${e ? e.items.length : 0})</h4>${rules}<h4>${t('Scénarios')} (${scs.length})</h4>${scn}<h4>${t('Sources de données (ATT&CK)')}</h4>${sourcesOf(id).map(c => `<div class="item"><a href="https://attack.mitre.org/datacomponents/${c.id}/" target="_blank" rel="noopener">${c.id}</a> ${esc(c.name)}</div>`).join('') || `<p class="mut">${t('Aucune stratégie de détection MITRE pour cette technique.')}</p>`}<h4>${t('Sous-techniques ({n}/{m} couvertes)', { n: subs.filter(x => (cm.get(x.id)?.exact || 0) >= 2).length, m: subs.length })}</h4>${sub}`;
     d.classList.add('open'); $(d, '.x').focus();
   }
 
@@ -125,6 +164,15 @@ export function render(root) {
   $(root, '#detail').onclick = e => { if (e.target.classList.contains('x')) close(); };
   root.onkeydown = e => { if (e.key === 'Escape' && $(root, '#detail').classList.contains('open')) close(); };
   drawMatrix();
+  $(root, '#snap').onclick = () => {
+    const label = prompt(t('Nom de l’instantané'), t('Instantané du {date}', { date: new Date().toLocaleDateString(locale) }));
+    if (label === null) return;
+    (state.snapshots ||= []).push(snapshot(analysis(), label.trim().slice(0, 100) || fmt(Date.now()))); view.cmp = ''; save(); render(root);
+  };
+  if (snaps.length) {
+    $(root, '#cmp').onchange = e => { view.cmp = e.target.value; render(root); };
+    $(root, '#snapdel').onclick = () => { const x = D.snap; undoable(t('Instantané « {name} » supprimé.', { name: x.label }), () => { state.snapshots = snaps.filter(y => y !== x); view.cmp = ''; save(); render(root); }); };
+  }
   const demo = $(root, '#demo'); if (demo) demo.onclick = async () => { await loadDemo(); showProject(); render(root); };
 
   const slug = state.name.normalize('NFD').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'projet';

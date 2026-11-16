@@ -1,4 +1,4 @@
-export const attack = { version: '', tactics: [], techniques: [] }; // objet partagé, rempli par loadAttack()
+export const attack = { version: '', tactics: [], techniques: [], components: [] }; // objet partagé, rempli par loadAttack()
 const byId = new Map();
 export async function loadAttack() {
   Object.assign(attack, globalThis.__ATTACK__ ?? await (await fetch('data/attack.json')).json()); // __ATTACK__ : version fichier unique
@@ -18,3 +18,5 @@ export function validate(ids) {
 export const parentOf = id => id.split('.')[0];
 /** Liste compacte pour les prompts : "T1059 Command and Scripting Interpreter" (techniques parentes seules). */
 export const promptCatalog = () => attack.techniques.filter(t => !t.id.includes('.')).map(t => `${t.id} ${t.name}`).join('\n');
+/** Composants de données ATT&CK ({id: 'DC0032', name}) utiles pour détecter la technique (stratégies de détection MITRE) ; sous-technique sans stratégie propre : ceux de la parente. */
+export const sourcesOf = id => (tech(id)?.dc || tech(parentOf(id))?.dc || []).map(i => attack.components[i]).filter(Boolean);

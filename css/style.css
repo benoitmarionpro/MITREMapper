@@ -114,3 +114,5 @@ label.chk input{width:auto;min-height:0;margin-top:.2rem}
 .lang:hover{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.6);color:#fff}
 .rm .rn{border:0;background:none;padding:0;border-radius:4px;font-weight:700;color:var(--fg);text-align:left;font-size:inherit}.rm .rn:hover{color:var(--acc);text-decoration:underline;background:none}
 .rm th .scb{border:0;background:none;padding:2px;border-radius:999px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.6rem;margin:.6rem 0}.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:.6rem .8rem}
+.kpi b{display:block;font:600 18px Poppins,sans-serif;color:var(--indigo-800)}.kpi span{color:var(--mut);font-size:12.5px}.tag small{font-weight:400;opacity:.8}
