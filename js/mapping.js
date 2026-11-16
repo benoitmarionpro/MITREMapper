@@ -218,7 +218,7 @@ export function render(root) {
     if (!nAI) return t('{n} règle(s) mappée(s) depuis leurs tags, sans IA.', { n: nTags });
     return t('{n} règle(s) mappée(s) depuis leurs tags ; {m} règle(s) traitée(s) par l’IA.', { n: nTags, m: nAI })
       + (cut ? ' ' + t('Attention : {k} règle(s) trop longue(s), seuls les {max} premiers caractères ont été analysés.', { k: cut, max: MAX_RULE }) : '');
-  });
+  }, [$(root, '#map'), $(root, '#remap')]);
   $(root, '#map').onclick = () => go(false);
   $(root, '#remap').onclick = () => undoable(t('Remappage de toutes les règles lancé (les corrections manuelles seront remplacées).'), () => go(true));
   draw();

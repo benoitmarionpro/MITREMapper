@@ -6,13 +6,15 @@ export const showProject = () => { const e = document.getElementById('proj'); if
 export const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 export const $ = (root, sel) => root.querySelector(sel);
 export const readFiles = async files => Promise.all([...files].map(async f => ({ name: f.name, text: await f.text() })));
-/** Exécute fn(signal) avec bouton annuler + statut. */
-export async function run(statusEl, fn) {
+/** Exécute fn(signal, say) avec statut animé + bouton annuler ; les boutons `lock` sont grisés pendant l'exécution (pas de double clic). */
+export async function run(statusEl, fn, lock = []) {
   const ac = new AbortController();
-  statusEl.innerHTML = `<span class="mut">${t('En cours…')} </span><button>${t('Annuler')}</button>`;
+  lock.forEach(b => b && (b.disabled = true));
+  statusEl.innerHTML = `<span class="mut spin">${t('En cours…')} </span><button>${t('Annuler')}</button>`;
   statusEl.querySelector('button').onclick = () => ac.abort();
   try { const done = await fn(ac.signal, msg => statusEl.firstChild.textContent = msg + ' '); statusEl.innerHTML = `<span class="ok">${esc(done || t('Terminé'))}</span>`; }
   catch (e) { statusEl.innerHTML = e.name === 'AbortError' ? `<span class="mut">${t('Annulé')}</span>` : `<span class="err">${esc(e.message)}</span>`; }
+  finally { lock.forEach(b => b && (b.disabled = false)); }
 }
 /** Exécute une action destructive, puis propose de l'annuler (bandeau 10 s). L'annulation réaffiche l'onglet courant. */
 let closeToast = () => {};

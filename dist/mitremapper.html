@@ -46,7 +46,8 @@ input[type=checkbox]{min-height:0}
 input[list]{padding-right:2rem;background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%236b7280' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right .7rem center/11px;cursor:pointer}
 input[list]::-webkit-calendar-picker-indicator{display:none!important}
 .mst{display:block;margin-top:.25rem;font-size:12px;color:var(--mut)}.mst.ok{color:var(--green-700)}.mst.warn{color:#8A4800}.mst.error{color:var(--red)}.mst.busy{color:var(--indigo-800)}
-.mst.busy::before{content:'';display:inline-block;width:9px;height:9px;margin-right:.35rem;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-1px}
+button:disabled,button:disabled:hover{opacity:.5;cursor:not-allowed;box-shadow:none}
+.mst.busy::before,.spin::before{content:'';display:inline-block;width:9px;height:9px;margin-right:.35rem;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-1px}
 #saveerr{position:fixed;left:1rem;right:1rem;bottom:1rem;z-index:100;padding:.75rem 1rem;border-radius:var(--radius);background:var(--red-bg);color:#a02a29;border:1px solid currentColor;font-weight:600;font-size:13px}
 #toast{position:fixed;left:50%;bottom:1.25rem;transform:translateX(-50%);z-index:101;display:flex;gap:1rem;align-items:center;padding:.6rem .75rem .6rem 1rem;border-radius:var(--radius);background:var(--ink-900,#16121f);color:#fff;box-shadow:var(--shadow);font-size:13px;max-width:calc(100% - 2rem)}
 #toast button{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);font-weight:600}
@@ -393,6 +394,7 @@ const EN = {
   'Règle « {name} » ajoutée et mappée : {n} scénario(s) lié(s){stage} ; confiance basse jusqu’à validation dans Règles.': 'Rule “{name}” added and mapped: {n} linked scenario(s){stage}; low confidence until validated in Rules.',
   ', étape {s}': ', stage {s}', 'Confiance basse : à valider': 'Low confidence: to be validated', 'Relire et valider dans Règles': 'Review and validate in Rules',
   '{n} règle(s) non mappée(s) : la couverture ne les prend pas encore en compte.': '{n} unmapped rule(s): coverage does not include them yet.', 'Mapper dans Règles': 'Map in Rules',
+  'Intégration de la règle…': 'Adding the rule…', 'Mise à jour de la cartographie MITRE…': 'Updating the MITRE mapping…',
   'Revenir en arrière': 'Undo', 'Scénarios existants remplacés.': 'Existing scenarios replaced.', 'Remappage de toutes les règles lancé (les corrections manuelles seront remplacées).': 'Remapping all rules (manual corrections will be replaced).',
   // store, ui
   'Projet introuvable': 'Project not found', 'Fichier projet invalide': 'Invalid project file', 'Projet importé': 'Imported project', 'Exemple introuvable : {f}': 'Sample not found: {f}',
@@ -553,13 +555,15 @@ const showProject = () => { const e = document.getElementById('proj'); if (e) e.
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const $ = (root, sel) => root.querySelector(sel);
 const readFiles = async files => Promise.all([...files].map(async f => ({ name: f.name, text: await f.text() })));
-/** Exécute fn(signal) avec bouton annuler + statut. */
-async function run(statusEl, fn) {
+/** Exécute fn(signal, say) avec statut animé + bouton annuler ; les boutons `lock` sont grisés pendant l'exécution (pas de double clic). */
+async function run(statusEl, fn, lock = []) {
   const ac = new AbortController();
-  statusEl.innerHTML = `<span class="mut">${t('En cours…')} </span><button>${t('Annuler')}</button>`;
+  lock.forEach(b => b && (b.disabled = true));
+  statusEl.innerHTML = `<span class="mut spin">${t('En cours…')} </span><button>${t('Annuler')}</button>`;
   statusEl.querySelector('button').onclick = () => ac.abort();
   try { const done = await fn(ac.signal, msg => statusEl.firstChild.textContent = msg + ' '); statusEl.innerHTML = `<span class="ok">${esc(done || t('Terminé'))}</span>`; }
   catch (e) { statusEl.innerHTML = e.name === 'AbortError' ? `<span class="mut">${t('Annulé')}</span>` : `<span class="err">${esc(e.message)}</span>`; }
+  finally { lock.forEach(b => b && (b.disabled = false)); }
 }
 /** Exécute une action destructive, puis propose de l'annuler (bandeau 10 s). L'annulation réaffiche l'onglet courant. */
 let closeToast = () => {};
@@ -956,7 +960,7 @@ function render(root) {
     if (!nAI) return t('{n} règle(s) mappée(s) depuis leurs tags, sans IA.', { n: nTags });
     return t('{n} règle(s) mappée(s) depuis leurs tags ; {m} règle(s) traitée(s) par l’IA.', { n: nTags, m: nAI })
       + (cut ? ' ' + t('Attention : {k} règle(s) trop longue(s), seuls les {max} premiers caractères ont été analysés.', { k: cut, max: MAX_RULE }) : '');
-  });
+  }, [$(root, '#map'), $(root, '#remap')]);
   $(root, '#map').onclick = () => go(false);
   $(root, '#remap').onclick = () => undoable(t('Remappage de toutes les règles lancé (les corrections manuelles seront remplacées).'), () => go(true));
   draw();
@@ -1367,15 +1371,15 @@ ${fence('source', scs.map(s => `${sref(s)} ${s.name} : ${s.summary || ''}`).join
       const y = typeof r?.sigma === 'string' ? r.sigma.slice(0, 20000) : '', notes = typeof r?.notes === 'string' ? r.notes.slice(0, 2000) : '';
       if (!/^\s*title\s*:/m.test(y) || !/^\s*detection\s*:/m.test(y)) throw new Error(t('Réponse inexploitable : pas de règle Sigma (title, detection).'));
       $(d, '#sout').innerHTML = `<pre>${esc(y)}</pre>${notes ? `<p class="mut">${esc(notes)}</p>` : ''}
-        <div class="bar"><button id="sadd" class="pri">${t('Ajouter aux règles (à valider)')}</button><button id="scopy">${t('Copier')}</button></div>`;
+        <div class="bar"><button id="sadd" class="pri">${t('Ajouter aux règles (à valider)')}</button><button id="scopy">${t('Copier')}</button><span id="sast" role="status"></span></div>`;
       $(d, '#scopy').onclick = () => navigator.clipboard?.writeText(y);
       // Ajout = mapping réel (même pipeline que l'onglet Règles : tags puis relecture IA), puis confiance basse forcée : une ébauche ne compte pas comme couverte avant validation.
-      $(d, '#sadd').onclick = () => run($(d, '#sst'), async (signal, say) => {
-        $(d, '#sadd').disabled = true;
+      $(d, '#sadd').onclick = () => run($(d, '#sast'), async (signal, say) => {
+        say(t('Intégration de la règle…'));
         const rule = { id: uid(), name: (y.match(/^title\s*:\s*['"]?(.+?)['"]?\s*$/m)?.[1] || id).slice(0, 200), source: t('ébauche IA'), body: y,
           techniques: [], scenarios: [], why: {}, reviewed: false, tags: [...new Set([id, ...extractTechniques(y)])], tagDiff: null, stage: '', confidence: 'low', note: '', mapped: false };
         let warn = '';
-        try { await mapRules([rule], { verify: true, signal, say }); }
+        try { await mapRules([rule], { verify: true, signal, say: () => say(t('Mise à jour de la cartographie MITRE…')) }); }
         catch (e) { if (e.name === 'AbortError') throw e; warn = t('Relecture IA impossible ({e}) : liens établis par les tags seulement.', { e: e.message }); }
         if (!rule.techniques.includes(id)) rule.techniques = validate([id, ...rule.techniques]).ok; // la règle a été écrite pour cet écart
         Object.assign(rule, { confidence: 'low', reviewed: false, note: [t('Ébauche générée par l’IA pour combler un écart : à relire, tester et valider.'), notes, rule.note].filter(Boolean).join(' ') });
@@ -1383,9 +1387,9 @@ ${fence('source', scs.map(s => `${sref(s)} ${s.name} : ${s.summary || ''}`).join
         undoable(warn ? `${msg} ${warn}` : msg, () => { state.rules.push(rule); save(); render(root); });
         draftDone(rule);
         return msg;
-      });
+      }, [$(d, '#sadd'), $(d, '#sgo'), $(d, '#scopy')]);
       return t('Ébauche générée : relis-la avant de l’ajouter.');
-    });
+    }, [$(d, '#sgo')]);
   }
 
   $(root, '#q').value = view.q; $(root, '#msc').value = view.sc; $(root, '#mshow').value = view.show;
@@ -1706,7 +1710,7 @@ function render(root) {
     if ($(root, '#repl').checked) undoable(t('Scénarios existants remplacés.'), add); else add();
     const n = state.cti.length;
     return n > MAX_CTI ? t('{k} scénario(s) générés. Attention : CTI tronquée, {max} caractères analysés sur {n}.', { k: out.length, max: MAX_CTI.toLocaleString(locale), n: n.toLocaleString(locale) }) : t('{k} scénario(s) générés.', { k: out.length });
-  });
+  }, [$(root, '#gen')]);
   draw();
 }
 

@@ -177,6 +177,7 @@ export const EN = {
   'Règle « {name} » ajoutée et mappée : {n} scénario(s) lié(s){stage} ; confiance basse jusqu’à validation dans Règles.': 'Rule “{name}” added and mapped: {n} linked scenario(s){stage}; low confidence until validated in Rules.',
   ', étape {s}': ', stage {s}', 'Confiance basse : à valider': 'Low confidence: to be validated', 'Relire et valider dans Règles': 'Review and validate in Rules',
   '{n} règle(s) non mappée(s) : la couverture ne les prend pas encore en compte.': '{n} unmapped rule(s): coverage does not include them yet.', 'Mapper dans Règles': 'Map in Rules',
+  'Intégration de la règle…': 'Adding the rule…', 'Mise à jour de la cartographie MITRE…': 'Updating the MITRE mapping…',
   'Revenir en arrière': 'Undo', 'Scénarios existants remplacés.': 'Existing scenarios replaced.', 'Remappage de toutes les règles lancé (les corrections manuelles seront remplacées).': 'Remapping all rules (manual corrections will be replaced).',
   // store, ui
   'Projet introuvable': 'Project not found', 'Fichier projet invalide': 'Invalid project file', 'Projet importé': 'Imported project', 'Exemple introuvable : {f}': 'Sample not found: {f}',

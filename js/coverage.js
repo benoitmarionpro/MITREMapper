@@ -193,15 +193,15 @@ ${fence('source', scs.map(s => `${sref(s)} ${s.name} : ${s.summary || ''}`).join
       const y = typeof r?.sigma === 'string' ? r.sigma.slice(0, 20000) : '', notes = typeof r?.notes === 'string' ? r.notes.slice(0, 2000) : '';
       if (!/^\s*title\s*:/m.test(y) || !/^\s*detection\s*:/m.test(y)) throw new Error(t('Réponse inexploitable : pas de règle Sigma (title, detection).'));
       $(d, '#sout').innerHTML = `<pre>${esc(y)}</pre>${notes ? `<p class="mut">${esc(notes)}</p>` : ''}
-        <div class="bar"><button id="sadd" class="pri">${t('Ajouter aux règles (à valider)')}</button><button id="scopy">${t('Copier')}</button></div>`;
+        <div class="bar"><button id="sadd" class="pri">${t('Ajouter aux règles (à valider)')}</button><button id="scopy">${t('Copier')}</button><span id="sast" role="status"></span></div>`;
       $(d, '#scopy').onclick = () => navigator.clipboard?.writeText(y);
       // Ajout = mapping réel (même pipeline que l'onglet Règles : tags puis relecture IA), puis confiance basse forcée : une ébauche ne compte pas comme couverte avant validation.
-      $(d, '#sadd').onclick = () => run($(d, '#sst'), async (signal, say) => {
-        $(d, '#sadd').disabled = true;
+      $(d, '#sadd').onclick = () => run($(d, '#sast'), async (signal, say) => {
+        say(t('Intégration de la règle…'));
         const rule = { id: uid(), name: (y.match(/^title\s*:\s*['"]?(.+?)['"]?\s*$/m)?.[1] || id).slice(0, 200), source: t('ébauche IA'), body: y,
           techniques: [], scenarios: [], why: {}, reviewed: false, tags: [...new Set([id, ...extractTechniques(y)])], tagDiff: null, stage: '', confidence: 'low', note: '', mapped: false };
         let warn = '';
-        try { await mapRules([rule], { verify: true, signal, say }); }
+        try { await mapRules([rule], { verify: true, signal, say: () => say(t('Mise à jour de la cartographie MITRE…')) }); }
         catch (e) { if (e.name === 'AbortError') throw e; warn = t('Relecture IA impossible ({e}) : liens établis par les tags seulement.', { e: e.message }); }
         if (!rule.techniques.includes(id)) rule.techniques = validate([id, ...rule.techniques]).ok; // la règle a été écrite pour cet écart
         Object.assign(rule, { confidence: 'low', reviewed: false, note: [t('Ébauche générée par l’IA pour combler un écart : à relire, tester et valider.'), notes, rule.note].filter(Boolean).join(' ') });
@@ -209,9 +209,9 @@ ${fence('source', scs.map(s => `${sref(s)} ${s.name} : ${s.summary || ''}`).join
         undoable(warn ? `${msg} ${warn}` : msg, () => { state.rules.push(rule); save(); render(root); });
         draftDone(rule);
         return msg;
-      });
+      }, [$(d, '#sadd'), $(d, '#sgo'), $(d, '#scopy')]);
       return t('Ébauche générée : relis-la avant de l’ajouter.');
-    });
+    }, [$(d, '#sgo')]);
   }
 
   $(root, '#q').value = view.q; $(root, '#msc').value = view.sc; $(root, '#mshow').value = view.show;

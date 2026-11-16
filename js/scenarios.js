@@ -106,6 +106,6 @@ export function render(root) {
     if ($(root, '#repl').checked) undoable(t('Scénarios existants remplacés.'), add); else add();
     const n = state.cti.length;
     return n > MAX_CTI ? t('{k} scénario(s) générés. Attention : CTI tronquée, {max} caractères analysés sur {n}.', { k: out.length, max: MAX_CTI.toLocaleString(locale), n: n.toLocaleString(locale) }) : t('{k} scénario(s) générés.', { k: out.length });
-  });
+  }, [$(root, '#gen')]);
   draw();
 }
