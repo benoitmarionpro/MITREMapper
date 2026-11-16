@@ -10,7 +10,7 @@ const views = { scenarios: [scenarios, t('Scénarios')], rules: [mapping, t('Rè
 const legacy = { 'Scénarios': 'scenarios', 'Règles': 'rules', 'Couverture': 'coverage', 'Paramètres': 'settings' };
 const tabs = document.getElementById('tabs'), view = document.getElementById('view');
 function show(id) {
-  [...tabs.children].forEach(b => b.classList.toggle('on', b.dataset.id === id));
+  [...tabs.children].forEach(b => { const on = b.dataset.id === id; b.classList.toggle('on', on); on ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'); });
   view.replaceChildren(); views[id][0].render(view); showProject();
   location.hash = id;
 }
@@ -18,6 +18,7 @@ for (const [id, [, label]] of Object.entries(views)) {
   const b = document.createElement('button'); b.textContent = label; b.dataset.id = id; b.onclick = () => show(id); tabs.append(b);
 }
 document.documentElement.lang = lang;
+tabs.setAttribute('aria-label', t('Onglets'));
 document.querySelector('footer').textContent = t('MITREMapper · Wavestone — Outil d’aide à la couverture de détection ATT&CK · Les propositions du LLM sont à relire');
 document.getElementById('proj').title = t('Projet courant (Paramètres → Projets)');
 const lb = document.getElementById('lang');

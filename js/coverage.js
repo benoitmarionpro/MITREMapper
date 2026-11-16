@@ -76,7 +76,7 @@ export function render(root) {
     <select id="mshow" aria-label="${t('Afficher')}">${Object.entries(SHOW).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
     <span id="legend"></span>
   </div>
-  <div id="matrix" class="matrix"></div><aside id="detail" aria-live="polite"></aside>
+  <div id="matrix" class="matrix"></div><aside id="detail" role="region" aria-label="${t('Détail de la technique')}"></aside>
   <h2>${t('Couverture par scénario')}</h2><table><thead><tr><th>${t('Scénario')}</th><th>${t('Couverture')}</th><th>${t('Techniques')}</th></tr></thead><tbody>${rowsHtml || `<tr><td colspan=3 class="mut">${t('Aucun scénario')}</td></tr>`}</tbody></table>
   <h2>${t('Écarts priorisés')}</h2><table><thead><tr><th>${t('Technique')}</th><th>${t('Statut')}</th><th>${t('Scénarios concernés')}</th></tr></thead><tbody>${gapRows || `<tr><td colspan=3 class="mut">${t('Aucun écart')}</td></tr>`}</tbody></table>`;
 
@@ -92,7 +92,7 @@ export function render(root) {
       if (!cells.length && (view.show !== 'all' || q)) return '';
       return `<div class="col"><h3>${esc(tc.name)}${relAll.length ? `<span title="${t('Techniques de scénario couvertes dans cette tactique')}">${relCov.length}/${relAll.length}</span>` : ''}</h3>${cells.map(te => {
         const k = kind(te, rel), e = cm.get(te.id);
-        return `<button class="cell ${k} ${rel.has(te.id) ? 'rel' : ''}" data-id="${te.id}"><b>${te.id}</b>${e ? `<i>×${e.n}</i>` : ''}<span>${esc(te.name)}</span></button>`;
+        return `<button class="cell ${k} ${rel.has(te.id) ? 'rel' : ''}" data-id="${te.id}" aria-label="${te.id} ${esc(te.name)} : ${LABEL[k] || t('hors scénarios')}${e ? ', ' + t('{n} règle(s)', { n: e.n }) : ''}"><b>${te.id}</b>${e ? `<i>×${e.n}</i>` : ''}<span>${esc(te.name)}</span></button>`;
       }).join('')}</div>`;
     }).join('');
     $(root, '#matrix').innerHTML = cols || `<p class="mut" style="padding:1rem">${t('Aucune technique ne correspond à ces filtres.')}</p>`;
@@ -118,9 +118,12 @@ export function render(root) {
   $(root, '#q').oninput = e => { view.q = e.target.value; drawMatrix(); };
   $(root, '#msc').onchange = e => { view.sc = e.target.value; drawMatrix(); };
   $(root, '#mshow').onchange = e => { view.show = e.target.value; drawMatrix(); };
-  $(root, '#matrix').onclick = e => { const c = e.target.closest('.cell'); if (c) openDetail(c.dataset.id); };
-  $(root, '#detail').onclick = e => { if (e.target.classList.contains('x')) e.currentTarget.classList.remove('open'); };
-  root.onkeydown = e => { if (e.key === 'Escape') $(root, '#detail').classList.remove('open'); };
+  let opened = '';
+  // fermeture du volet : le focus revient sur la cellule d'origine (navigation clavier)
+  const close = () => { $(root, '#detail').classList.remove('open'); root.querySelector(`.cell[data-id="${opened}"]`)?.focus(); };
+  $(root, '#matrix').onclick = e => { const c = e.target.closest('.cell'); if (c) openDetail(opened = c.dataset.id); };
+  $(root, '#detail').onclick = e => { if (e.target.classList.contains('x')) close(); };
+  root.onkeydown = e => { if (e.key === 'Escape' && $(root, '#detail').classList.contains('open')) close(); };
   drawMatrix();
   const demo = $(root, '#demo'); if (demo) demo.onclick = async () => { await loadDemo(); showProject(); render(root); };
 
@@ -133,7 +136,7 @@ export function render(root) {
   $(root, '#nav').onclick = () => { const s = state.scenarios.find(x => x.id === view.sc); exportJson(`mitremapper-layer-${s ? sref(s) : 'global'}.json`, layer(analysis(), s)); };
   $(root, '#navz').onclick = () => download(`mitremapper-layers-${slug}.zip`, layersZip(analysis()));
   $(root, '#csv').onclick = () => {
-    const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`, sc = id => state.scenarios.find(s => s.id === id)?.name;
+    const q = v => `"${String(v ?? '').replace(/^[=+\-@\t\r]/, "'$&").replace(/"/g, '""')}"` // préfixe ' : pas de formule exécutée par Excel, sc = id => state.scenarios.find(s => s.id === id)?.name;
     exportJson('mitremapper-rules.csv', [t('règle,source,techniques,scénarios,étape,confiance,note'),
       ...state.rules.map(r => [r.name, r.source, r.techniques.join(' '), r.scenarios.map(sc).join(' | '), r.stage, r.confidence, r.note].map(q).join(','))].join('\n'));
   };

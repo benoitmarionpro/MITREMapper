@@ -1,5 +1,6 @@
 import { setKey } from './keys.js';
 import { t, lang } from './i18n.js';
+import { validate } from './attack.js';
 const KEY = 'mitremapper.v1';                         // projet courant + réglages
 const LIB = 'mitremapper.lib', LIBP = 'mitremapper.lib.'; // index des projets + données de chaque projet (sans réglages)
 export const DEFAULT_STAGES = lang === 'en' ? ['Prevention', 'Detection', 'Investigation', 'Response'] : ['Prévention', 'Détection', 'Investigation', 'Réponse'];
@@ -29,8 +30,16 @@ export const save = () => {
     const lib = readLib(); lib[state.pid] = { name: state.name, updated: new Date().toISOString() };
     localStorage.setItem(LIB, JSON.stringify(lib));
     localStorage.setItem(LIBP + state.pid, JSON.stringify(projectForExport()));
-  } catch (e) { console.warn(e); }
+    saveError('');
+  } catch (e) { console.warn(e); saveError(t('Enregistrement impossible ({e}) : le stockage du navigateur est probablement plein. Les dernières modifications seront perdues à la fermeture de l’onglet : exporte le projet en JSON (Paramètres) ou supprime d’anciens projets.', { e: e.name })); }
 };
+/** Bandeau persistant tant que l'enregistrement échoue (sinon perte silencieuse du travail). */
+function saveError(msg) {
+  let b = document.getElementById('saveerr');
+  if (!msg) return b?.remove();
+  if (!b) { b = document.createElement('div'); b.id = 'saveerr'; b.setAttribute('role', 'alert'); document.body.append(b); }
+  b.textContent = msg;
+}
 
 try {
   const d = JSON.parse(localStorage.getItem(KEY));
@@ -49,6 +58,11 @@ function loadInto(d) {
   Object.assign(state, fresh(), d, { settings: keep });
   save();
 }
+// ponytail: une seule action annulable (la dernière), historique complet si le besoin apparaît
+let snap = null;
+/** Mémorise le projet avant une action destructive ; undo() le restaure (même pid : un projet supprimé réapparaît). */
+export const checkpoint = () => { snap = JSON.stringify(projectForExport()); };
+export const undo = () => { if (snap) { loadInto(JSON.parse(snap)); snap = null; } };
 export const listProjects = () => Object.entries(readLib()).map(([pid, p]) => ({ pid, ...p })).sort((a, b) => b.updated.localeCompare(a.updated));
 export function openProject(pid) {
   const d = JSON.parse(localStorage.getItem(LIBP + pid) || 'null');
@@ -69,9 +83,37 @@ export function download(name, blob) {
 }
 export const exportJson = (name, data) => download(name, new Blob([typeof data === 'string' ? data : JSON.stringify(data, null, 2)]));
 /** Importe un fichier projet comme NOUVEAU projet (le projet courant reste dans la bibliothèque). */
+const str = (v, max = 20000) => typeof v === 'string' ? v.slice(0, max) : typeof v === 'number' ? String(v) : '';
+const one = (v, ok, def) => ok.includes(v) ? v : def;
+const techs = v => validate(Array.isArray(v) ? v.map(x => str(x, 20)) : []).ok;
+const strs = v => Array.isArray(v) ? v.slice(0, 50).map(x => str(x, 40)) : [];
+/** Fichier importé = donnée non fiable : on ne garde que les champs connus, typés, et on régénère les identifiants (insérés dans le HTML). */
+export function sanitize(d) {
+  if (!d || !Array.isArray(d.scenarios) || !Array.isArray(d.rules)) throw new Error(t('Fichier projet invalide'));
+  const ids = new Map();
+  const scenarios = d.scenarios.filter(s => s && typeof s === 'object').map(s => {
+    const id = uid(); ids.set(s.id, id);
+    return { id, ref: Number.isInteger(s.ref) && s.ref > 0 ? s.ref : undefined, name: str(s.name, 300), priority: one(s.priority, ['high', 'medium', 'low'], 'medium'), techniques: techs(s.techniques), summary: str(s.summary), actors: str(s.actors, 1000), rationale: str(s.rationale), rejected: strs(s.rejected) };
+  });
+  const rules = d.rules.filter(r => r && typeof r === 'object').map(r => {
+    const why = {};
+    for (const [k, v] of Object.entries(r.why && typeof r.why === 'object' ? r.why : {})) if (ids.has(k)) why[ids.get(k)] = str(v, 1000);
+    const td = r.tagDiff && typeof r.tagDiff === 'object' ? { tags: techs(r.tagDiff.tags), ia: techs(r.tagDiff.ia) } : null;
+    return {
+      id: uid(), name: str(r.name, 300), source: str(r.source, 300), body: str(r.body, 200000), techniques: techs(r.techniques), rejected: strs(r.rejected),
+      scenarios: (Array.isArray(r.scenarios) ? r.scenarios : []).filter(x => ids.has(x)).map(x => ids.get(x)), why,
+      reviewed: r.reviewed === true, tags: techs(r.tags), by: one(r.by, ['tags', 'ia'], undefined), tagDiff: td,
+      stage: str(r.stage, 100), confidence: one(r.confidence, ['high', 'medium', 'low', ''], 'low'), note: str(r.note, 2000), mapped: r.mapped === true,
+    };
+  });
+  const c = d.client && typeof d.client === 'object' ? d.client : {};
+  return {
+    name: str(d.name, 200), nextRef: Number.isInteger(d.nextRef) && d.nextRef > 0 ? d.nextRef : 1, cti: str(d.cti, 2000000),
+    client: Object.fromEntries(['sector', 'size', 'country', 'assets'].map(k => [k, str(c[k], 500)])), scenarios, rules,
+  };
+}
 export function importProject(text, name) {
-  const d = JSON.parse(text);
-  if (!d.scenarios || !d.rules) throw new Error(t('Fichier projet invalide'));
+  const d = sanitize(JSON.parse(text));
   loadInto({ ...d, pid: uid(), name: d.name && !['Projet sans nom', 'Untitled project'].includes(d.name) ? d.name : name || t('Projet importé') });
 }
 /** Charge un fichier de data/sample/ (démos rapides). */

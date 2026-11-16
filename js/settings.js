@@ -1,7 +1,7 @@
 import { state, save, exportJson, importProject, projectForExport, loadDemo, listProjects, openProject, newProject, deleteProject } from './store.js';
 import { PROVIDERS, llm } from './llm.js';
 import { getKey, setKey, clearKeys, isRemembered, mask, isAuthorized, setAuthorized } from './keys.js';
-import { esc, $, showProject } from './ui.js';
+import { esc, $, showProject, undoable } from './ui.js';
 import { t, locale } from './i18n.js';
 
 export function render(root) {
@@ -109,7 +109,7 @@ export function render(root) {
   $(root, '#pname').onchange = e => { state.name = e.target.value.trim() || t('Projet sans nom'); save(); reload(); };
   $(root, '#plist').onchange = e => { try { openProject(e.target.value); } catch (x) { alert(x.message); } reload(); };
   $(root, '#pnew').onclick = () => { const n = prompt(t('Nom du nouveau projet'), t('Nouveau projet')); if (n !== null) { newProject(n.trim()); reload(); } };
-  $(root, '#pdel').onclick = () => { if (confirm(t('Supprimer définitivement le projet « {name} » de ce navigateur ?', { name: state.name }))) { deleteProject(state.pid); reload(); } };
+  $(root, '#pdel').onclick = () => { if (confirm(t('Supprimer le projet « {name} » de ce navigateur ?', { name: state.name }))) undoable(t('Projet « {name} » supprimé.', { name: state.name }), () => { deleteProject(state.pid); reload(); }); };
   const slug = state.name.normalize('NFD').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'projet';
   $(root, '#exp').onclick = () => exportJson(`mitremapper-${slug}.json`, projectForExport());
   $(root, '#imp').onchange = async e => {
@@ -117,5 +117,5 @@ export function render(root) {
     try { importProject(await file.text(), file.name.replace(/\.json$/i, '')); reload(); } catch (x) { alert(x.message); }
   };
   $(root, '#demo').onclick = async () => { try { await loadDemo(); reload(); } catch (x) { alert(x.message); } };
-  $(root, '#reset').onclick = () => { if (confirm(t('Vider le projet « {name} » (scénarios, règles, CTI) ?', { name: state.name }))) { state.scenarios = []; state.rules = []; state.cti = ''; save(); } };
+  $(root, '#reset').onclick = () => undoable(t('Projet « {name} » vidé (scénarios, règles, CTI).', { name: state.name }), () => { state.scenarios = []; state.rules = []; state.cti = ''; save(); });
 }

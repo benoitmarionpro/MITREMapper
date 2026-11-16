@@ -1,7 +1,8 @@
 import { state, save, uid, sample, sref } from './store.js';
-import { chatJson } from './llm.js';
+import { chatJson, fence, UNTRUSTED } from './llm.js';
+const MAX_RULE = 3000; // caractères d'une règle envoyés au LLM
 import { attack, tech, validate, parentOf, promptCatalog } from './attack.js';
-import { esc, $, readFiles, run } from './ui.js';
+import { esc, $, readFiles, run, undoable } from './ui.js';
 import { isAuthorized } from './keys.js';
 import { t, lang } from './i18n.js';
 
@@ -12,6 +13,7 @@ Réponds en JSON : {"results":[{"i":0,"techniques":["T1059.001"],"scenarios":[{"
 - scenarios = scénarios ci-dessous (S1, S2…) dont la règle détecte réellement une étape ; sois sélectif, [] si aucun. why = une phrase qui dit quelle étape du scénario la règle détecte.
 - confidence : high = détection directe et robuste ; medium = partielle/contournable ; low = indirecte ou très bruitée.
 - why et note : ${lang === 'en' ? 'rédigés EN ANGLAIS' : 'rédigés en français'}.
+- ${UNTRUSTED}
 Scénarios :\n${scenarios.map(s => `${sref(s)} ${s.name} [${s.techniques.join(',')}]`).join('\n') || '(aucun)'}
 Techniques parentes de référence :\n${promptCatalog()}`;
 
@@ -79,7 +81,7 @@ export function render(root) {
   <div class="mtools"><input id="q" type="search" placeholder="${t('Chercher règle ou technique')}" aria-label="${t('Chercher')}"><span id="flt"></span><span id="prog" class="mut"></span></div>
   <p class="mut" style="margin:.2rem 0 .6rem">${t('<b>●</b> lié, techniques en commun · <b class="err">⚠</b> lié sans technique commune (à challenger) · <b style="color:var(--amber)">◌</b> non lié mais technique en commun (oubli possible) · clic sur une cellule = lier / délier · clic sur une ligne = détail')}</p>
   <div class="mwrap"><table class="rm"><thead id="head"></thead><tbody id="rows"></tbody><tfoot id="foot"></tfoot></table></div>
-  <aside id="detail" aria-live="polite"></aside><datalist id="techlist">${attack.techniques.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</datalist>`;
+  <aside id="detail" role="region" aria-label="${t('Détail de la règle')}"></aside><datalist id="techlist">${attack.techniques.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</datalist>`;
 
   if (!isAuthorized()) $(root, '#st').innerHTML = `<span class="mut">${t('IA non autorisée : seules les règles avec tags ATT&amp;CK seront mappées (autorisation dans Paramètres).')}</span>`;
   const sc = () => state.scenarios, rule = id => state.rules.find(r => r.id === id);
@@ -89,16 +91,16 @@ export function render(root) {
     const q = view.q.trim().toLowerCase(), S = sc();
     $(root, '#n').textContent = state.rules.length;
     $(root, '#prog').textContent = t('{n}/{m} validées', { n: state.rules.filter(r => r.reviewed).length, m: state.rules.length });
-    $(root, '#flt').innerHTML = Object.entries(FILTERS).map(([f, l]) => `<button class="lg flt ${view.f === f ? 'on' : ''}" data-f="${f}">${l} ${f === 'all' ? state.rules.length : state.rules.filter(r => flags(r)[f]).length}</button>`).join('');
-    $(root, '#head').innerHTML = `<tr><th></th><th>${t('Règle')}</th><th>${t('Techniques')}</th>${S.map(s => `<th class="sc ${view.hl === s.id ? 'hl' : ''}" data-hl="${s.id}" title="${t('{name} ({prio}) : trier par ce scénario', { name: esc(s.name), prio: esc(s.priority) })}"><span class="tag sref">${sref(s)}</span></th>`).join('')}</tr>`;
+    $(root, '#flt').innerHTML = Object.entries(FILTERS).map(([f, l]) => `<button class="lg flt ${view.f === f ? 'on' : ''}" aria-pressed="${view.f === f}" data-f="${f}">${l} ${f === 'all' ? state.rules.length : state.rules.filter(r => flags(r)[f]).length}</button>`).join('');
+    $(root, '#head').innerHTML = `<tr><th></th><th>${t('Règle')}</th><th>${t('Techniques')}</th>${S.map(s => `<th class="sc ${view.hl === s.id ? 'hl' : ''}" data-hl="${s.id}"><button class="scb" aria-pressed="${view.hl === s.id}" title="${t('{name} ({prio}) : trier par ce scénario', { name: esc(s.name), prio: esc(s.priority) })}"><span class="tag sref">${sref(s)}</span></button></th>`).join('')}</tr>`;
     const list = state.rules.filter(r => (view.f === 'all' || flags(r)[view.f])
       && (!q || (r.name + ' ' + r.source + ' ' + r.techniques.map(x => x + ' ' + (tech(x)?.name || '')).join(' ')).toLowerCase().includes(q)));
     if (view.hl) list.sort((a, b) => b.scenarios.includes(view.hl) - a.scenarios.includes(view.hl));
     $(root, '#rows').innerHTML = list.map(r => `<tr data-id="${r.id}" class="${view.sel === r.id ? 'sel' : ''}">
       <td><input type="checkbox" data-rev ${r.reviewed ? 'checked' : ''} aria-label="${t('Règle validée')}"></td>
-      <td><b>${esc(r.name)}</b><div class="mut">${esc(r.source)}${r.confidence ? ' · ' + esc(r.confidence) : ''}${r.stage ? ' · ' + esc(r.stage) : ''}${r.by ? ' · ' + (r.by === 'tags' ? t('via tags') : t('via IA')) : ''}</div></td>
+      <td><button class="rn" aria-label="${t('Détail de la règle')} : ${esc(r.name)}">${esc(r.name)}</button><div class="mut">${esc(r.source)}${r.confidence ? ' · ' + esc(r.confidence) : ''}${r.stage ? ' · ' + esc(r.stage) : ''}${r.by ? ' · ' + (r.by === 'tags' ? t('via tags') : t('via IA')) : ''}</div></td>
       <td>${chips(r.techniques)}${r.rejected?.length ? `<div class="err">${t('rejetés : {ids}', { ids: esc(r.rejected.join(', ')) })}</div>` : ''}</td>
-      ${S.map(s => { const k = linkState(r, s); return `<td class="lk ${k} ${view.hl === s.id ? 'hl' : ''}"><button data-s="${s.id}" aria-pressed="${r.scenarios.includes(s.id)}" title="${esc(s.name)}">${SYM[k] || (r.scenarios.includes(s.id) ? '●' : '·')}</button></td>`; }).join('')}</tr>`).join('')
+      ${S.map(s => { const k = linkState(r, s); return `<td class="lk ${k} ${view.hl === s.id ? 'hl' : ''}"><button data-s="${s.id}" aria-pressed="${r.scenarios.includes(s.id)}" title="${esc(s.name)}" aria-label="${sref(s)} ${esc(s.name)}${k === 'suspect' ? ' : ' + t('lié sans technique commune') : k === 'miss' ? ' : ' + t('oubli possible') : ''}">${SYM[k] || (r.scenarios.includes(s.id) ? '●' : '·')}</button></td>`; }).join('')}</tr>`).join('')
       || `<tr><td colspan="${3 + S.length}" class="mut">${state.rules.length ? t('Aucune règle ne correspond à ces filtres.') : t('Aucune règle : importe-en ci-dessus.')}</td></tr>`;
     const linked = s => state.rules.filter(r => r.scenarios.includes(s.id));
     const open = s => { const ls = linked(s); return s.techniques.filter(x => !ls.some(r => r.techniques.some(y => parentOf(y) === parentOf(x)))).length; };
@@ -141,13 +143,14 @@ export function render(root) {
     const r = rule(tr.dataset.id), b = e.target.closest('button[data-s]');
     if (e.target.closest('input')) return;
     if (b) { link(r, b.dataset.s, !r.scenarios.includes(b.dataset.s)); save(); draw(); return; }
-    view.sel = r.id; draw(); detail();
+    view.sel = r.id; draw(); detail(); $(root, '#detail .x').focus();
   };
   $(root, '#rows').onchange = e => { if (e.target.matches('[data-rev]')) { rule(e.target.closest('tr').dataset.id).reviewed = e.target.checked; save(); draw(); } };
   const dt = $(root, '#detail');
+  const close = () => { dt.classList.remove('open'); root.querySelector(`tr[data-id="${view.sel}"] .rn`)?.focus(); }; // focus rendu à la ligne d'origine
   dt.onclick = e => {
     const r = rule(view.sel), el = e.target;
-    if (el.classList.contains('x')) return dt.classList.remove('open');
+    if (el.classList.contains('x')) return close();
     if (!r) return;
     if (el.dataset.unlink) link(r, el.dataset.unlink, false);
     else if (el.dataset.link) link(r, el.dataset.link, true);
@@ -156,7 +159,7 @@ export function render(root) {
     else if (el.dataset.addt !== undefined) {
       const v = validate($(dt, '#addt').value.split(/[,\s]+/).filter(Boolean));
       r.techniques = [...new Set([...r.techniques, ...v.ok])]; r.mapped = true; r.rejected = v.rejected;
-    } else if (el.dataset.d === 'del') { if (!confirm(t('Supprimer cette règle ?'))) return; state.rules = state.rules.filter(x => x !== r); view.sel = null; dt.classList.remove('open'); }
+    } else if (el.dataset.d === 'del') { view.sel = null; dt.classList.remove('open'); return undoable(t('Règle « {name} » supprimée.', { name: r.name }), () => { state.rules = state.rules.filter(x => x !== r); save(); draw(); }); }
     else return;
     save(); draw();
   };
@@ -165,7 +168,7 @@ export function render(root) {
     if (k === 'rev') r.reviewed = e.target.checked; else r[k] = e.target.value;
     save(); draw();
   };
-  root.onkeydown = e => { if (e.key === 'Escape') dt.classList.remove('open'); };
+  root.onkeydown = e => { if (e.key === 'Escape' && dt.classList.contains('open')) close(); };
 
   $(root, '#demo').onclick = async () => { state.rules.push(...splitRules(t('exemple.yml'), await sample('rules.yml'))); save(); draw(); };
   $(root, '#addp').onclick = () => { const p = $(root, '#paste'); state.rules.push(...splitRules(t('collé'), p.value)); p.value = ''; save(); draw(); };
@@ -190,20 +193,24 @@ export function render(root) {
     for (let i = 0; i < todo.length; i += n) {
       say(t('Lot {i}/{n}…', { i: i / n + 1, n: Math.ceil(todo.length / n) }));
       const batch = todo.slice(i, i + n);
-      const user = batch.map((r, k) => `### i=${k} (${r.name})\n${r.body.slice(0, 3000)}`).join('\n\n');
+      const user = batch.map((r, k) => `### i=${k}\n${fence('rule', `${r.name}\n${r.body.slice(0, MAX_RULE)}`)}`).join('\n\n');
       const res = (await chatJson({ system, user, signal }));
-      for (const x of res.results || res) {
-        const r = batch[x.i]; if (!r) continue;
-        const v = validate(x.techniques), links = (x.scenarios || []).map(e => typeof e === 'string' ? { s: e } : e)
-          .map(l => ({ id: scId(l.s, S), why: l.why })).filter(l => l.id); // ancien format (liste d'IDs) accepté
-        Object.assign(r, { techniques: v.ok, rejected: v.rejected, stage: x.stage || '', confidence: x.confidence || 'medium', note: x.note || '', mapped: true, reviewed: false,
+      for (const x of [res.results || res].flat()) { // sortie LLM = donnée non fiable : valeurs bornées
+        const r = batch[x?.i]; if (!r) continue;
+        const txt = (v, n) => typeof v === 'string' ? v.slice(0, n) : '';
+        const v = validate(Array.isArray(x.techniques) ? x.techniques.map(String) : []), links = (Array.isArray(x.scenarios) ? x.scenarios : []).map(e => typeof e === 'string' ? { s: e } : e || {})
+          .map(l => ({ id: scId(l.s, S), why: txt(l.why, 1000) })).filter(l => l.id); // ancien format (liste d'IDs) accepté
+        Object.assign(r, { techniques: v.ok, rejected: v.rejected, stage: state.settings.stages.includes(x.stage) ? x.stage : '', confidence: ['high', 'medium', 'low'].includes(x.confidence) ? x.confidence : 'medium',
+          note: txt(x.note, 2000), mapped: true, reviewed: false,
           scenarios: links.map(l => l.id), why: Object.fromEntries(links.filter(l => l.why).map(l => [l.id, l.why])), by: 'ia', tagDiff: tagDiff(tagsOf(r), v.ok) });
       }
       save(); draw();
     }
-    return t('{n} règle(s) mappée(s) depuis leurs tags ; {m} règle(s) traitée(s) par l’IA.', { n: nTags, m: todo.length });
+    const cut = todo.filter(r => r.body.length > MAX_RULE).length;
+    return t('{n} règle(s) mappée(s) depuis leurs tags ; {m} règle(s) traitée(s) par l’IA.', { n: nTags, m: todo.length })
+      + (cut ? ' ' + t('Attention : {k} règle(s) trop longue(s), seuls les {max} premiers caractères ont été analysés.', { k: cut, max: MAX_RULE }) : '');
   });
   $(root, '#map').onclick = () => go(false);
-  $(root, '#remap').onclick = () => go(true);
+  $(root, '#remap').onclick = () => undoable(t('Remappage de toutes les règles lancé (les corrections manuelles seront remplacées).'), () => go(true));
   draw();
 }

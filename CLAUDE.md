@@ -51,7 +51,12 @@ Règle de couverture (`coverage.js`, `status(coverageMap(), id)`) : *couverte* s
 ## Conventions
 - Interface bilingue (`js/i18n.js`) : tout texte affiché passe par `t('texte français', { var })` (clé = français, `{var}` pour les variables, apostrophe typographique ’ dans les clés) et doit avoir son entrée dans `EN` (vérifié par `test.html`). Langue mémorisée dans `localStorage` (`mitremapper.lang`), changement = rechargement. Prompts en français, avec consigne de rédiger en anglais si `lang === 'en'`. Les noms de techniques restent ceux de MITRE.
 - Ne pas nommer `t` une variable locale dans un module qui importe `t`.
-- Toute sortie LLM passe par `chatJson` puis `validate()` avant d'entrer dans l'état.
+- Action destructive (suppression, vidage, remplacement, remappage complet) : l'envelopper dans `undoable(libellé, fn)` (`ui.js`), qui mémorise le projet (`checkpoint`/`undo` de `store.js`, une seule action annulable) et affiche « Revenir en arrière » (Ctrl+Z) pendant 10 s.
+- Accessibilité : tout élément cliquable est un `<button>` (pas de `div`/`tr` seul), avec `aria-label` quand l'état n'est porté que par la couleur ou un symbole ; un volet de détail prend le focus à l'ouverture et le rend à l'élément d'origine à la fermeture (Échap).
+- Toute sortie LLM passe par `chatJson` puis `validate()` avant d'entrer dans l'état ; elle est traitée comme non fiable (scénarios via `sanitize()`, valeurs de mapping bornées).
+- Contenus analysés (CTI, règles) envoyés au LLM entre balises via `fence()` + consigne `UNTRUSTED` (`llm.js`) : ce sont des données, jamais des instructions. Toute troncature (`MAX_CTI`, `MAX_RULE`) est signalée à l'utilisateur.
+- Tout projet importé passe par `sanitize()` (`store.js`) : champs connus seulement, typés et bornés, identifiants régénérés (ils sont insérés dans le HTML), techniques validées. Ajouter un champ au modèle = l'ajouter aussi dans `sanitize()`, sinon il est perdu à l'import.
+- Exports CSV : préfixer `'` les cellules commençant par `= + - @` (injection de formule).
 - Le référentiel ATT&CK évolue (v19 a scindé Defense Evasion en Stealth + Defense Impairment) : ne pas coder en dur la liste des tactiques, elle vient de `attack.json`.
 - Vérifier après modification : `node --check js/*.js`, ouvrir `test.html`, tester sur l'exemple de `data/sample/`, régénérer `dist/mitremapper.html` et l'ouvrir en `file://`.
 
