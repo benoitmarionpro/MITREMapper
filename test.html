@@ -131,7 +131,7 @@ t('stockage plein : bandeau affiché puis retiré', banner && !document.getEleme
 const { t: tr, EN } = await import('./js/i18n.js');
 t('i18n : français par défaut, variables', tr('{n} sur {m}', { n: 2, m: 3 }) === '2 sur 3');
 const used = new Set();
-for (const f of ['app', 'coverage', 'export', 'llm', 'mapping', 'scenarios', 'settings', 'store', 'ui'])
+for (const f of ['app', 'coverage', 'export', 'home', 'llm', 'mapping', 'scenarios', 'settings', 'store', 'ui'])
   for (const m of (await (await fetch(`js/${f}.js`, { cache: 'no-cache' })).text()).matchAll(/\bt\((['"])((?:(?!\1).)*)\1/g)) used.add(m[2]);
 const missing = [...used].filter(k => !(k in EN));
 if (missing.length) o.textContent += `Traductions manquantes : ${missing.join(' | ')}\n`;

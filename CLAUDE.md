@@ -19,7 +19,8 @@ Le LLM fait le gros du travail ; l'utilisateur relit et corrige. Les IDs ATT&CK 
 | Fichier | Rôle |
 |---|---|
 | `index.html`, `css/style.css` | Coquille, charte Wavestone (tokens repris de l'outil Mythos Readiness Assessment, thème clair uniquement) |
-| `js/app.js` | Onglets (Scénarios, Règles, Couverture, Paramètres), chargement ATT&CK |
+| `js/app.js` | Onglets (Accueil, Scénarios, Règles, Couverture, Paramètres ; Accueil par défaut), chargement ATT&CK |
+| `js/home.js` | Accueil : parcours en 3 étapes avec leur état (fait / à faire / en attente), état de l’IA, accès à la démo |
 | `js/store.js` | État du projet ↔ localStorage, import/export JSON (les `settings` ne sont jamais exportés/écrasés) |
 | `js/llm.js` | Registre `PROVIDERS`, `config()` (validation), `LLMError`, `llm` (`LLMClient`), `parseJson` tolérant, `chatJson` (1 retry) |
 | `js/keys.js` | Clés API (session / mémorisées, par fournisseur) et autorisation d'usage de l'IA |

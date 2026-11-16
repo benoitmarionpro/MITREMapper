@@ -15,6 +15,8 @@ L'IA propose, vous validez. Tout tourne dans votre navigateur : pas de serveur, 
 - **Sans serveur (fichier unique)** : ouvrir `dist/mitremapper.html` par double-clic dans un navigateur. Rien à installer. Le fichier est régénéré par `node tools/build-standalone.mjs` (outil de développement, non requis pour l'utiliser).
 - **Dossier statique** : `python tools/serve.py` puis <http://localhost:8000> (serveur de développement sans cache : évite que le navigateur, Firefox notamment, garde d'anciens fichiers JS). `python -m http.server 8000` fonctionne aussi, mais forcer alors le rechargement (Ctrl+Shift+R) après une mise à jour. Tout hébergement statique convient (GitHub Pages, nginx…). Ouvrir `index.html` directement ne fonctionne pas, les modules JS exigent HTTP : utiliser le fichier unique dans ce cas.
 
+L'onglet **Accueil**, ouvert par défaut, présente le parcours en trois étapes (scénarios, règles, couverture) avec leur état pour le projet courant (fait, à faire, en attente), met en avant la prochaine étape, rappelle si l'usage de l'IA est autorisé et propose la démo lors d'une première visite.
+
 ## Langue
 
 Le bouton **EN / FR** en haut à droite bascule toute l'interface (écrans, messages, rapport client, classeur Excel, couches Navigator) entre français et anglais ; le choix est mémorisé dans le navigateur. En anglais, l'IA rédige aussi les scénarios et justifications en anglais. Les données déjà saisies ne sont pas traduites ; les exemples et la démo existent dans les deux langues (chargés dans la langue de l'interface).

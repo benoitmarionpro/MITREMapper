@@ -2,13 +2,14 @@ import { loadAttack, attack } from './attack.js';
 import { showProject } from './ui.js';
 import { state, save, upgradeIds } from './store.js';
 import { t, lang, setLang } from './i18n.js';
+import * as home from './home.js';
 import * as settings from './settings.js';
 import * as scenarios from './scenarios.js';
 import * as mapping from './mapping.js';
 import * as coverage from './coverage.js';
 // id d'onglet (ancre d'URL) -> [module, libellé] ; les anciennes ancres françaises restent acceptées
-const views = { scenarios: [scenarios, t('Scénarios')], rules: [mapping, t('Règles')], coverage: [coverage, t('Couverture')], settings: [settings, t('Paramètres')] };
-const legacy = { 'Scénarios': 'scenarios', 'Règles': 'rules', 'Couverture': 'coverage', 'Paramètres': 'settings' };
+const views = { home: [home, t('Accueil')], scenarios: [scenarios, t('Scénarios')], rules: [mapping, t('Règles')], coverage: [coverage, t('Couverture')], settings: [settings, t('Paramètres')] };
+const legacy = { 'Accueil': 'home', 'Scénarios': 'scenarios', 'Règles': 'rules', 'Couverture': 'coverage', 'Paramètres': 'settings' };
 const tabs = document.getElementById('tabs'), view = document.getElementById('view');
 function show(id) {
   [...tabs.children].forEach(b => { const on = b.dataset.id === id; b.classList.toggle('on', on); on ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'); });
@@ -30,4 +31,4 @@ await loadAttack();
 upgradeIds(state); save(); // projet enregistré avec une version précédente d'ATT&CK : IDs révoqués convertis
 document.getElementById('ver').textContent = `ATT&CK Enterprise v${attack.version}`;
 const h = decodeURIComponent(location.hash.slice(1));
-show(views[h] ? h : legacy[h] || 'settings');
+show(views[h] ? h : legacy[h] || 'home');

@@ -123,6 +123,9 @@ label.chk input{width:auto;min-height:0;margin-top:.2rem}
 .rm th .scb{border:0;background:none;padding:2px;border-radius:999px}
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.6rem;margin:.6rem 0}.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:.6rem .8rem}
 .kpi b{display:block;font:600 18px Poppins,sans-serif;color:var(--indigo-800)}.kpi span{color:var(--mut);font-size:12.5px}.tag small{font-weight:400;opacity:.8}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.8rem}.step{margin:0;display:flex;flex-direction:column}.step button{margin-top:auto;align-self:flex-start}
+.step .sh{display:flex;align-items:center;gap:.6rem}.step h3{margin:0;flex:1;font-size:15px}.step .num{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--ink-100);color:var(--indigo-800);font-weight:700}
+.step.done .num{background:var(--green-50);color:var(--green-700)}.step.next{border-color:var(--acc);box-shadow:0 0 0 2px rgba(90,43,224,.15),var(--shadow)}.step.next .num{background:var(--acc);color:#fff}.step.wait{opacity:.75}
 
 </style>
 </head>
@@ -348,6 +351,17 @@ const EN = {
   'Avant ({label})': 'Before ({label})', 'Maintenant': 'Now', 'Avant': 'Before', 'hors périmètre': 'out of scope',
   'Évolution depuis « {label} » ({date})': 'Progress since “{label}” ({date})', 'couverture ({d} pts)': 'coverage ({d} pts)',
   'techniques améliorées': 'improved techniques', 'techniques dégradées': 'degraded techniques',
+  'Accueil': 'Home', 'Scénarios de menace': 'Threat scenarios', 'Règles de détection': 'Detection rules', 'Couverture et livrables': 'Coverage and deliverables',
+  'Profil du client et rapports CTI : l’IA propose les scénarios à couvrir, tu les relis.': 'Client profile and CTI reports: the AI suggests the scenarios to cover, you review them.',
+  'Importe les règles (Sigma, KQL, SPL…) : mappées sur ATT&CK et sur les scénarios, par leurs tags ou par l’IA.': 'Import the rules (Sigma, KQL, SPL…): mapped to ATT&CK and to the scenarios, from their tags or by the AI.',
+  'Matrice ATT&CK, écarts priorisés, sources de données, rapport client, Excel et couches Navigator.': 'ATT&CK matrix, prioritised gaps, data sources, client report, Excel and Navigator layers.',
+  '{n} scénario(s) : {list}': '{n} scenario(s): {list}', 'Aucun scénario.': 'No scenario.', '{n} règle(s), {m} mappée(s), {v} validée(s)': '{n} rule(s), {m} mapped, {v} validated', 'Aucune règle.': 'No rule.',
+  '{pct} % des techniques des scénarios couvertes, {gap} écart(s)': '{pct}% of scenario techniques covered, {gap} gap(s)', 'Disponible quand scénarios et règles sont en place.': 'Available once scenarios and rules are in place.',
+  'Fait': 'Done', 'À faire': 'To do', 'En attente': 'Waiting', 'Projet « {name} »': 'Project “{name}”',
+  'MITREMapper aide à vérifier qu’un client détecte les attaques qui le menacent : scénarios issus de la CTI, règles de détection mappées sur MITRE ATT&CK, couverture et écarts priorisés.': 'MITREMapper helps check that a client detects the attacks that threaten it: scenarios derived from CTI, detection rules mapped to MITRE ATT&CK, coverage and prioritised gaps.',
+  'Ouvrir': 'Open', 'Intelligence artificielle': 'Artificial intelligence', 'Autorisée pour cette session': 'Authorised for this session', 'Non autorisée': 'Not authorised',
+  'les règles taguées sont mappées sans IA ; le reste attend l’autorisation.': 'tagged rules are mapped without AI; the rest waits for authorisation.', 'Fournisseur : {p}, modèle {m}': 'Provider: {p}, model {m}',
+  'Première visite ?': 'First visit?', 'La démo ouvre un projet complet (11 scénarios, 7 règles déjà mappés) sans appel à l’IA.': 'The demo opens a complete project (11 scenarios, 7 rules already mapped) without calling the AI.', 'Ouvrir la démo': 'Open the demo',
   'Revenir en arrière': 'Undo', 'Scénarios existants remplacés.': 'Existing scenarios replaced.', 'Remappage de toutes les règles lancé (les corrections manuelles seront remplacées).': 'Remapping all rules (manual corrections will be replaced).',
   // store, ui
   'Projet introuvable': 'Project not found', 'Fichier projet invalide': 'Invalid project file', 'Projet importé': 'Imported project', 'Exemple introuvable : {f}': 'Sample not found: {f}',
@@ -690,6 +704,449 @@ async function chatJson(args) {
 }
 
 return { PROVIDERS, LLMError, redact, config, llm, parseJson, fence, UNTRUSTED, chatJson };
+})();
+__m.export = (() => {
+// Livrables client : rapport HTML imprimable (PDF), classeur Excel (.xlsx), couches ATT&CK Navigator.
+// Sans dépendance : le .xlsx et le .zip sont écrits ici (zip non compressé). A = analysis() de coverage.js.
+const { state, sref } = __m.store;
+const { attack, tech, sourcesOf } = __m.attack;
+const { esc } = __m.ui;
+const { t, lang, locale } = __m.i18n;
+const LBL = { cov: t('Couvert'), part: t('Partiel'), gap: t('Écart') };
+const PRIO = { high: t('Haute'), medium: t('Moyenne'), low: t('Basse') };
+const prio = p => PRIO[p] || p || '';
+const name = id => tech(id)?.name || '';
+const scName = id => state.scenarios.find(s => s.id === id);
+const yesNo = b => b ? t('oui') : t('non');
+const sgn = n => (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(n);
+const dcNames = id => sourcesOf(id).map(c => c.name).join(', ');
+const origin = r => r.by === 'tags' ? 'tags' : r.by === 'ia' ? t('IA') : '';
+
+/** Recommandation déterministe pour une technique de scénario non couverte. */
+function reco(A, g) {
+  if (g.k === 'gap') return t('Aucune détection : créer une règle pour cette technique.');
+  const e = A.cm.get(g.id);
+  if (!e) return t('Seule la technique parente est couverte : vérifier que la détection couvre cette sous-technique.');
+  if (e.best < 2) return t('Détection de confiance basse : renforcer ou compléter la règle existante.');
+  const subs = attack.techniques.filter(x => x.id.startsWith(g.id + '.'));
+  const ok = subs.filter(x => (A.cm.get(x.id)?.exact || 0) >= 2).length;
+  return t('Sous-techniques couvertes : {n}/{m} ; compléter les variantes utilisées par les scénarios.', { n: ok, m: subs.length });
+}
+
+/* ---------- ATT&CK Navigator ---------- */
+const versions = () => ({ layer: '4.5', navigator: '5.1.0', attack: String(attack.version).split('.')[0] });
+/** Couche globale (score = meilleure confiance) ou couche d'un scénario (3 couvert, 2 partiel, 1 écart). */
+function layer(A, s) {
+  if (!s) return {
+    name: `MITREMapper : ${state.name}`, description: t('Couverture globale : score = meilleure confiance des règles (1 basse, 2 moyenne, 3 haute)'),
+    versions: versions(), domain: 'enterprise-attack', gradient: { colors: ['#ef9f27', '#2f9e5b'], minValue: 1, maxValue: 3 },
+    techniques: [...A.cm].map(([techniqueID, e]) => ({ techniqueID, score: e.best, comment: e.rules.join('; ') })),
+  };
+  const x = A.scen.find(r => r.s === s), score = { gap: 1, part: 2, cov: 3 };
+  return {
+    name: `${sref(s)} ${s.name}`, description: t('Scénario {ref}, priorité {p} : 3 couvert, 2 partiel, 1 écart', { ref: sref(s), p: prio(s.priority) }),
+    versions: versions(), domain: 'enterprise-attack', gradient: { colors: ['#e24b4a', '#ef9f27', '#2f9e5b'], minValue: 1, maxValue: 3 },
+    techniques: x.st.map(([techniqueID, k]) => ({ techniqueID, score: score[k], comment: `${LBL[k]} : ${(A.cm.get(techniqueID)?.rules || []).join('; ') || t('aucune règle')}` })),
+  };
+}
+const layersZip = A => zip({
+  '00-global.json': JSON.stringify(layer(A), null, 1),
+  ...Object.fromEntries(A.scen.map(({ s }) => [`${sref(s)}.json`, JSON.stringify(layer(A, s), null, 1)])),
+});
+
+/* ---------- ZIP (méthode « stockée », sans compression) ---------- */
+const CRC = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+const crc32 = b => { let c = ~0; for (const x of b) c = CRC[(c ^ x) & 255] ^ (c >>> 8); return ~c >>> 0; };
+function zip(files) {
+  const enc = new TextEncoder(), parts = [], central = [];
+  let off = 0;
+  for (const [fname, data] of Object.entries(files)) {
+    const n = enc.encode(fname), d = typeof data === 'string' ? enc.encode(data) : data, crc = crc32(d);
+    const h = new DataView(new ArrayBuffer(30));
+    [[0, 0x04034b50, 4], [4, 20, 2], [6, 0x0800, 2], [12, 0x21, 2], [14, crc, 4], [18, d.length, 4], [22, d.length, 4], [26, n.length, 2]]
+      .forEach(([o, v, z]) => z === 4 ? h.setUint32(o, v, true) : h.setUint16(o, v, true));
+    const c = new DataView(new ArrayBuffer(46));
+    [[0, 0x02014b50, 4], [4, 20, 2], [6, 20, 2], [8, 0x0800, 2], [14, 0x21, 2], [16, crc, 4], [20, d.length, 4], [24, d.length, 4], [28, n.length, 2], [42, off, 4]]
+      .forEach(([o, v, z]) => z === 4 ? c.setUint32(o, v, true) : c.setUint16(o, v, true));
+    parts.push(h, n, d); central.push(c, n);
+    off += 30 + n.length + d.length;
+  }
+  const size = central.reduce((a, x) => a + x.byteLength, 0), count = central.length / 2, e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, count, true); e.setUint16(10, count, true); e.setUint32(12, size, true); e.setUint32(16, off, true);
+  return new Blob([...parts, ...central, e], { type: 'application/zip' });
+}
+
+/* ---------- Excel (.xlsx) ---------- */
+const xesc = v => String(v ?? '').slice(0, 32000).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const colName = i => { let s = ''; for (i++; i; i = (i - 1) / 26 | 0) s = String.fromCharCode(65 + (i - 1) % 26) + s; return s; };
+function sheet(rows, widths) {
+  const cell = (v, r, c) => {
+    const ref = colName(c) + (r + 1), st = r === 0 ? ' s="1"' : '';
+    return typeof v === 'number' ? `<c r="${ref}"${st}><v>${v}</v></c>` : `<c r="${ref}" t="inlineStr"${st}><is><t xml:space="preserve">${xesc(v)}</t></is></c>`;
+  };
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`
+    + `<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>`
+    + `<cols>${widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('')}</cols>`
+    + `<sheetData>${rows.map((row, r) => `<row r="${r + 1}">${row.map((v, c) => cell(v, r, c)).join('')}</row>`).join('')}</sheetData></worksheet>`;
+}
+function workbook(A) {
+  const c = state.client, refs = ids => ids.map(scName).filter(Boolean).map(sref).join(' '), rel = new Set(A.scen.flatMap(x => x.st.map(([id]) => id)));
+  const sheets = {
+    [t('Synthèse')]: [[[t('Indicateur'), t('Valeur')], [t('Projet'), state.name], [t('Date'), new Date().toLocaleDateString(locale)], [t('Référentiel'), `ATT&CK Enterprise v${attack.version}`],
+      [t('Secteur'), c.sector], [t('Taille'), c.size], [t('Pays / zones'), c.country], [t('Actifs clés'), c.assets],
+      [t('Scénarios'), state.scenarios.length], [t('Règles'), state.rules.length], [t('Règles validées'), state.rules.filter(r => r.reviewed).length],
+      [t('Techniques de scénario'), A.nTech], [t('Couvertes'), A.tot.cov], [t('Partielles'), A.tot.part], [t('Écarts'), A.tot.gap], [t('Couverture globale (%)'), A.pct]], [28, 60]],
+    [t('Scénarios')]: [[[t('Réf'), t('Scénario'), t('Priorité'), t('Acteurs'), t('Résumé'), t('Techniques'), t('Couvertes'), t('Partielles'), t('Écarts'), t('Couverture (%)'), t('Règles liées')],
+      ...A.scen.map(({ s, c: n, pct }) => [sref(s), s.name, prio(s.priority), s.actors || '', s.summary || '', s.techniques.join(' '), n.cov, n.part, n.gap, pct,
+        state.rules.filter(r => r.scenarios.includes(s.id)).length])], [6, 45, 10, 25, 60, 40, 11, 11, 8, 14, 12]],
+    [t('Écarts')]: [[[t('Technique'), t('Nom'), t('Statut'), t('Priorité'), t('Scénarios'), t('Recommandation'), t('Sources de données (ATT&CK)')],
+      ...A.gaps.map(g => [g.id, g.name, LBL[g.k], prio(['high', 'medium', 'low'][g.p]), g.scs.map(sref).join(' '), reco(A, g), dcNames(g.id)])], [12, 40, 10, 10, 22, 80, 60]],
+    [t('Sources de données')]: [[[t('Composant'), t('Nom'), t('Écarts'), t('Priorité max.'), t('Techniques concernées')],
+      ...A.sources.map(c => [c.id, c.name, c.ids.length, prio(['high', 'medium', 'low'][c.p]), c.ids.join(' ')])], [12, 40, 9, 14, 80]],
+    [t('Règles')]: [[[t('Règle'), t('Source'), t('Origine'), t('Techniques'), t('Scénarios'), t('Étape'), t('Confiance'), t('Validée'), t('Note')],
+      ...state.rules.map(r => [r.name, r.source, origin(r), r.techniques.join(' '), refs(r.scenarios), r.stage || '', r.confidence || '', yesNo(r.reviewed), r.note || ''])],
+      [45, 16, 9, 30, 22, 14, 11, 9, 70]],
+    [t('Techniques')]: [[[t('Technique'), t('Nom'), t('Tactiques'), t('Statut'), t('Dans un scénario'), t('Nb règles'), t('Règles')],
+      ...attack.techniques.filter(x => rel.has(x.id) || A.cm.has(x.id)).map(x => {
+        const k = A.status(x.id), e = A.cm.get(x.id);
+        return [x.id, x.name, x.tactics.join(', '), k === 'gap' && !rel.has(x.id) ? '' : LBL[k], yesNo(rel.has(x.id)), e ? e.n : 0, e ? e.rules.join('; ') : ''];
+      })], [12, 40, 30, 10, 16, 10, 80]],
+  };
+  const D = A.diff;
+  if (D) sheets[t('Évolution')] = [[[t('Technique'), t('Nom'), t('Avant ({label})', { label: D.snap.label }), t('Maintenant')],
+    ...[...D.better, ...D.worse].map(x => [x.id, name(x.id), LBL[x.from], LBL[x.to]]),
+    ...D.added.map(id => [id, name(id), t('hors périmètre'), LBL[A.status(id)]]), ...D.removed.map(id => [id, name(id), LBL[D.snap.st[id]], t('hors périmètre')])], [12, 40, 22, 14]];
+  const names = Object.keys(sheets), ns = 'http://schemas.openxmlformats.org/';
+  const files = {
+    '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="${ns}package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${names.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`,
+    '_rels/.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${ns}package/2006/relationships"><Relationship Id="rId1" Type="${ns}officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
+    'xl/workbook.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="${ns}spreadsheetml/2006/main" xmlns:r="${ns}officeDocument/2006/relationships"><sheets>${names.map((n, i) => `<sheet name="${xesc(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>`,
+    'xl/_rels/workbook.xml.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${ns}package/2006/relationships">${names.map((_, i) => `<Relationship Id="rId${i + 1}" Type="${ns}officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}<Relationship Id="rId${names.length + 1}" Type="${ns}officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
+    'xl/styles.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="${ns}spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="2"><xf/><xf fontId="1" applyFont="1"/></cellXfs></styleSheet>`,
+    ...Object.fromEntries(names.map((n, i) => [`xl/worksheets/sheet${i + 1}.xml`, sheet(...sheets[n])])),
+  };
+  return new Blob([zip(files)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+
+/* ---------- Rapport client (HTML imprimable) ---------- */
+function reportHtml(A) {
+  const c = state.client, date = new Date().toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' });
+  const rel = new Set(A.scen.flatMap(x => x.st.map(([id]) => id.split('.')[0])));
+  const validated = state.rules.filter(r => r.reviewed).length;
+  const kpi = (v, l, cls = '') => `<div class="kpi ${cls}"><b>${v}</b><span>${l}</span></div>`;
+  const bar = n => { const tot = n.cov + n.part + n.gap || 1; return `<div class="bar">${['cov', 'part', 'gap'].map(k => n[k] ? `<i class="${k}" style="width:${100 * n[k] / tot}%"></i>` : '').join('')}</div>`; };
+  const parents = attack.techniques.filter(x => !x.id.includes('.'));
+  const cols = attack.tactics.map(tc => {
+    const cells = parents.filter(x => x.tactics.includes(tc.short)).map(x => [x, A.status(x.id)]).filter(([x, k]) => k !== 'gap' || rel.has(x.id));
+    return cells.length ? `<div class="col"><h4>${esc(tc.name)}</h4>${cells.map(([x, k]) => `<div class="cell ${k}${rel.has(x.id) ? ' rel' : ''}"><b>${x.id}</b> ${esc(x.name)}</div>`).join('')}</div>` : '';
+  }).join('');
+  const profile = [c.sector, c.size, c.country].filter(Boolean);
+  return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><title>${t('Couverture de détection : {name}', { name: esc(state.name) })}</title><style>
+:root{--ind:#451DC7;--ind8:#2D1380;--ink:#16121F;--mut:#6B6580;--line:#E6E4EE;--cov:#04F06A;--covt:#088A42;--part:#EF9F27;--partb:#FEF6E8;--gap:#E24B4A;--gapb:#FDF1F1}
+*{box-sizing:border-box}body{margin:0;font:11pt/1.5 Inter,'Segoe UI',system-ui,sans-serif;color:var(--ink);background:#fff}
+h1,h2,h3,h4{font-family:Poppins,'Segoe UI',system-ui,sans-serif;line-height:1.25}
+header{background:radial-gradient(120% 120% at 25% 15%,#5226E0 0%,#451DC7 38%,#2D1380 100%);color:#fff;padding:28px 36px}
+header h1{margin:0 0 6px;font-size:22pt}header p{margin:0;opacity:.85}
+main{padding:8px 36px 32px;max-width:1200px;margin:auto}h2{color:var(--ind);font-size:15pt;margin:28px 0 10px;border-bottom:2px solid var(--ind);padding-bottom:4px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}.kpi{border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.kpi b{display:block;font:600 20pt Poppins,'Segoe UI',sans-serif;color:var(--ind8)}.kpi span{color:var(--mut);font-size:9.5pt}.kpi.cov b{color:var(--covt)}.kpi.part b{color:#8A4800}.kpi.gap b{color:var(--gap)}
+table{border-collapse:collapse;width:100%;font-size:9.5pt}th,td{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertical-align:top}th{color:var(--mut);font-weight:600;background:#F5F4F9}
+tr{break-inside:avoid}.ref{display:inline-block;background:var(--ind);color:#fff;border-radius:4px;padding:0 6px;font-weight:600;font-size:9pt}
+.bar{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--line);min-width:120px}.bar i{display:block}.bar .cov{background:var(--cov)}.bar .part{background:var(--part)}.bar .gap{background:var(--gap)}
+.st{font-weight:600}.st.cov{color:var(--covt)}.st.part{color:#8A4800}.st.gap{color:var(--gap)}
+.matrix{display:flex;flex-wrap:wrap;gap:6px}.col{width:150px}.col h4{margin:0 0 4px;font-size:9pt;color:var(--ind8);border-bottom:2px solid var(--ind)}
+.cell{font-size:7.5pt;line-height:1.25;padding:3px 4px;margin-bottom:2px;border:1px solid var(--line);border-radius:3px;break-inside:avoid}
+.cell.cov{background:var(--cov);border-color:var(--cov)}.cell.part{background:var(--partb);border-color:var(--part)}.cell.gap{background:var(--gapb);border-color:var(--gap)}.cell.rel{box-shadow:inset 3px 0 0 var(--ind)}
+.legend span{display:inline-block;margin-right:14px;font-size:9pt}.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.mut{color:var(--mut)}.noprint{position:fixed;top:12px;right:12px}.noprint button{font:600 10pt Inter,sans-serif;background:#fff;color:var(--ind);border:0;border-radius:999px;padding:8px 16px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+@page{size:A4;margin:12mm}@page matrice{size:A4 landscape;margin:10mm}.pg-matrix{page:matrice;break-before:page}
+@media print{.noprint{display:none}header{-webkit-print-color-adjust:exact;print-color-adjust:exact}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}h2{break-after:avoid}}
+</style></head><body>
+<div class="noprint"><button onclick="print()">${t('Imprimer / PDF')}</button></div>
+<header><h1>${t('Couverture de détection : {name}', { name: esc(state.name) })}</h1>
+<p>${date} · ${t('Référentiel MITRE ATT&amp;CK Enterprise v{v}', { v: esc(attack.version) })}${profile.length ? ' · ' + esc(profile.join(' · ')) : ''}</p></header>
+<main>
+<h2>${t('Synthèse')}</h2>
+<div class="kpis">${kpi(A.pct + ' %', t('des techniques des scénarios couvertes'), 'cov')}${kpi(state.scenarios.length, t('scénarios de menace'))}${kpi(state.rules.length, t('règles analysées ({n} validées)', { n: validated }))}${kpi(A.tot.cov, t('techniques couvertes'), 'cov')}${kpi(A.tot.part, t('techniques partielles'), 'part')}${kpi(A.tot.gap, t('écarts de détection'), 'gap')}</div>
+<p>${t('Sur les {n} techniques ATT&amp;CK mobilisées par les {s} scénarios retenus{assets}, {cov} sont couvertes par au moins une règle fiable, {part} le sont partiellement et {gap} ne disposent d’aucune détection.', { n: A.nTech, s: state.scenarios.length, assets: c.assets ? t(' (actifs clés : {a})', { a: esc(c.assets) }) : '', cov: A.tot.cov, part: A.tot.part, gap: A.tot.gap })}${A.gaps.length ? ' ' + t('Les {n} actions prioritaires portent sur {list}.', { n: Math.min(5, A.gaps.length), list: A.gaps.slice(0, 5).map(g => `${g.id} (${esc(g.name)})`).join(', ') }) : ''}</p>
+
+${A.diff ? (D => `<h2>${t('Évolution depuis « {label} » ({date})', { label: esc(D.snap.label), date: new Date(D.snap.date).toLocaleDateString(locale) })}</h2>
+<div class="kpis">${kpi(`${D.snap.pct} → ${A.pct} %`, t('couverture ({d} pts)', { d: sgn(D.dPct) }), D.dPct >= 0 ? 'cov' : 'gap')}${kpi(sgn(D.dCov), t('techniques couvertes'), 'cov')}${kpi(sgn(D.dGap), t('écarts de détection'), 'gap')}${kpi(D.better.length, t('techniques améliorées'))}${kpi(D.worse.length, t('techniques dégradées'), D.worse.length ? 'gap' : '')}</div>
+${D.better.length || D.worse.length ? `<table><thead><tr><th>${t('Technique')}</th><th>${t('Avant')}</th><th>${t('Maintenant')}</th></tr></thead><tbody>${[...D.better, ...D.worse].map(x => `<tr><td><b>${x.id}</b> ${esc(name(x.id))}</td><td class="st ${x.from}">${LBL[x.from]}</td><td class="st ${x.to}">${LBL[x.to]}</td></tr>`).join('')}</tbody></table>` : ''}`)(A.diff) : ''}
+<h2>${t('Couverture par scénario')}</h2>
+<table><thead><tr><th>${t('Réf')}</th><th>${t('Scénario')}</th><th>${t('Priorité')}</th><th>${t('Couverture')}</th><th></th><th>${t('Détail')}</th></tr></thead><tbody>
+${A.scen.map(({ s, c: n, pct }) => `<tr><td><span class="ref">${sref(s)}</span></td><td><b>${esc(s.name)}</b>${s.actors ? `<div class="mut">${esc(s.actors)}</div>` : ''}</td><td>${prio(s.priority)}</td><td>${bar(n)}</td><td><b>${pct} %</b></td><td class="mut">${t('{c} couvertes, {p} partielles, {g} écarts', { c: n.cov, p: n.part, g: n.gap })}</td></tr>`).join('')}
+</tbody></table>
+
+<h2>${t('Écarts prioritaires et recommandations')}</h2>
+${A.gaps.length ? `<table><thead><tr><th>${t('Technique')}</th><th>${t('Statut')}</th><th>${t('Priorité')}</th><th>${t('Scénarios')}</th><th>${t('Recommandation')}</th></tr></thead><tbody>
+${A.gaps.map(g => `<tr><td><b>${g.id}</b> ${esc(g.name)}</td><td class="st ${g.k}">${LBL[g.k]}</td><td>${prio(['high', 'medium', 'low'][g.p])}</td><td>${g.scs.map(s => `<span class="ref" title="${esc(s.name)}">${sref(s)}</span>`).join(' ')}</td><td>${esc(reco(A, g))}</td></tr>`).join('')}
+</tbody></table>` : `<p>${t('Aucun écart : toutes les techniques des scénarios sont couvertes.')}</p>`}
+
+${A.sources.length ? `<h2>${t('Sources de données à prioriser')}</h2>
+<p class="mut">${t('Composants de données MITRE ATT&amp;CK nécessaires pour détecter les écarts, classés par nombre d’écarts et priorité des scénarios. À confronter aux journaux réellement collectés.')}</p>
+<table><thead><tr><th>${t('Composant de données')}</th><th>${t('Écarts')}</th><th>${t('Priorité max.')}</th><th>${t('Techniques concernées')}</th></tr></thead><tbody>
+${A.sources.slice(0, 15).map(c => `<tr><td><b>${esc(c.name)}</b> <span class="mut">${c.id}</span></td><td>${c.ids.length}</td><td>${prio(['high', 'medium', 'low'][c.p])}</td><td>${c.ids.join(', ')}</td></tr>`).join('')}
+</tbody></table>` : ''}
+
+<section class="pg-matrix"><h2>${t('Matrice ATT&amp;CK')}</h2>
+<p class="legend"><span><i style="background:var(--cov)"></i>${t('Couvert')}</span><span><i style="background:var(--partb);border:1px solid var(--part)"></i>${t('Partiel')}</span><span><i style="background:var(--gapb);border:1px solid var(--gap)"></i>${t('Écart (technique d’un scénario)')}</span><span><i style="background:#fff;box-shadow:inset 3px 0 0 var(--ind);border:1px solid var(--line)"></i>${t('Technique d’un scénario')}</span></p>
+<div class="matrix">${cols}</div></section>
+
+<h2>${t('Inventaire des règles')}</h2>
+<table><thead><tr><th>${t('Règle')}</th><th>${t('Techniques')}</th><th>${t('Scénarios')}</th><th>${t('Étape')}</th><th>${t('Confiance')}</th><th>${t('Origine')}</th><th>${t('Validée')}</th></tr></thead><tbody>
+${state.rules.map(r => `<tr><td><b>${esc(r.name)}</b><div class="mut">${esc(r.source)}</div></td><td>${r.techniques.map(id => `<span title="${esc(name(id))}">${id}</span>`).join(', ')}</td><td>${r.scenarios.map(scName).filter(Boolean).map(s => `<span class="ref">${sref(s)}</span>`).join(' ')}</td><td>${esc(r.stage || '')}</td><td>${esc(r.confidence || '')}</td><td>${origin(r)}</td><td>${yesNo(r.reviewed)}</td></tr>`).join('')}
+</tbody></table>
+
+<h2>${t('Méthode et limites')}</h2>
+<ul>
+<li>${t('Scénarios dérivés de sources CTI et du profil client ; techniques validées contre le référentiel MITRE ATT&amp;CK Enterprise v{v}.', { v: esc(attack.version) })}</li>
+<li>${t('Règles mappées à partir de leurs tags ATT&amp;CK quand ils existent, sinon par analyse assistée par IA ; {n}/{m} règles relues et validées par un analyste.', { n: validated, m: state.rules.length })}</li>
+<li>${t('<b>Couvert</b> : règle de confiance moyenne ou haute sur la technique, ou sur toutes ses sous-techniques. <b>Partiel</b> : seulement certaines sous-techniques, confiance basse, ou seule la technique parente. <b>Écart</b> : aucune règle.')}</li>
+<li>${t('La couverture mesure l’existence de détections, pas leur efficacité opérationnelle (qualité des journaux, taux de faux positifs, délais de traitement).')}</li>
+</ul>
+<p class="mut">${t('Généré par MITREMapper (Wavestone) le {date}.', { date })}</p>
+</main></body></html>`;
+}
+
+return { reco, layer, layersZip, zip, workbook, reportHtml };
+})();
+__m.coverage = (() => {
+const { state, save, exportJson, download, loadDemo, sref, uid } = __m.store;
+const { attack, parentOf, tech, sourcesOf } = __m.attack;
+const { reportHtml, workbook, layer, layersZip } = __m.export;
+const { esc, $, showProject, undoable } = __m.ui;
+const { t, locale } = __m.i18n;
+const RANK = { low: 1, medium: 2, high: 3 };
+/** id -> {n, best, exact, rules[], items[]} : une règle sur une sous-technique compte aussi pour la parente ;
+ *  exact = meilleure confiance des règles qui citent la technique elle-même. */
+function coverageMap(rules = state.rules) {
+  const m = new Map();
+  for (const r of rules) {
+    const c = RANK[r.confidence] || 2, ids = new Map(); // id -> cité exactement par la règle ?
+    for (const x of r.techniques) { ids.set(x, true); if (!ids.has(parentOf(x))) ids.set(parentOf(x), false); }
+    for (const [id, exact] of ids) {
+      const e = m.get(id) || { n: 0, best: 0, exact: 0, rules: [], items: [] };
+      e.n++; e.best = Math.max(e.best, c); if (exact) e.exact = Math.max(e.exact, c); e.rules.push(r.name); e.items.push(r); m.set(id, e);
+    }
+  }
+  return m;
+}
+const subsOf = id => attack.techniques.filter(x => x.id.startsWith(id + '.')).map(x => x.id);
+/** Statut d'une technique :
+ *  cov  = règle medium+ sur la technique elle-même, ou toutes ses sous-techniques couvertes (medium+) ;
+ *  part = seulement certaines sous-techniques, confiance basse, ou (pour une sous-technique) seule la parente est couverte ;
+ *  gap  = aucune règle. */
+function status(cm, id) {
+  const e = cm.get(id);
+  if (!e) return id.includes('.') && cm.get(parentOf(id))?.exact ? 'part' : 'gap';
+  if (e.exact >= 2) return 'cov';
+  const subs = id.includes('.') ? [] : subsOf(id);
+  return subs.length && subs.every(s => (cm.get(s)?.exact || 0) >= 2) ? 'cov' : 'part';
+}
+const LABEL = { cov: t('couvert'), part: t('partiel'), gap: t('écart') };
+const PRIO = { high: 0, medium: 1, low: 2 }, PRIOL = [t('Haute'), t('Moyenne'), t('Basse')];
+/** Analyse partagée par l'écran et les exports : statuts par scénario, écarts priorisés, totaux. */
+function analysis() {
+  const cm = coverageMap();
+  const scen = state.scenarios.map(s => {
+    const st = s.techniques.map(id => [id, status(cm, id)]), c = { cov: 0, part: 0, gap: 0 };
+    st.forEach(([, k]) => c[k]++);
+    return { s, st, c, pct: s.techniques.length ? Math.round(100 * c.cov / s.techniques.length) : 0 };
+  });
+  const g = new Map();
+  for (const { s, st } of scen) for (const [id, k] of st) if (k !== 'cov') {
+    const x = g.get(id) || { id, name: tech(id)?.name || '', k, scs: [], p: 3 };
+    x.scs.push(s); x.p = Math.min(x.p, PRIO[s.priority] ?? 1); g.set(id, x);
+  }
+  const gaps = [...g.values()].sort((a, b) => a.p - b.p || (b.k === 'gap') - (a.k === 'gap') || b.scs.length - a.scs.length);
+  const uniq = new Map(scen.flatMap(x => x.st)), tot = { cov: 0, part: 0, gap: 0 };
+  uniq.forEach(k => tot[k]++);
+  const A = { cm, status: id => status(cm, id), scen, gaps, tot, nTech: uniq.size, pct: uniq.size ? Math.round(100 * tot.cov / uniq.size) : 0, sources: sourcesFor(gaps) };
+  const snap = state.snapshots?.find(x => x.id === view.cmp) || (view.cmp === '' ? state.snapshots?.at(-1) : null);
+  return Object.assign(A, { diff: snap ? compare(A, snap) : null });
+}
+/** Composants de données ATT&CK à prioriser : ceux qui servent au plus d'écarts, pondérés par la priorité des scénarios (high 3, medium 2, low 1). */
+function sourcesFor(gaps) {
+  const m = new Map();
+  for (const g of gaps) for (const c of sourcesOf(g.id)) {
+    const x = m.get(c.id) || { ...c, ids: [], p: 3, w: 0 };
+    x.ids.push(g.id); x.p = Math.min(x.p, g.p); x.w += 3 - g.p; m.set(c.id, x);
+  }
+  return [...m.values()].sort((a, b) => b.w - a.w || b.ids.length - a.ids.length || a.id.localeCompare(b.id));
+}
+/** Instantané figé de la couverture (statut de chaque technique de scénario) pour mesurer l'évolution. */
+const snapshot = (A, label) => ({ id: uid(), date: new Date().toISOString(), label, pct: A.pct, tot: { ...A.tot }, nTech: A.nTech,
+  st: Object.fromEntries(A.scen.flatMap(x => x.st)), scen: A.scen.map(({ s, pct }) => ({ ref: s.ref, name: s.name, pct })) });
+const RK = { gap: 0, part: 1, cov: 2 };
+/** Différence entre un instantané et l'état courant (techniques améliorées, dégradées, entrées ou sorties du périmètre, scénarios). */
+function compare(A, snap) {
+  const now = new Map(A.scen.flatMap(x => x.st)), before = new Map(Object.entries(snap.st)), both = [...now.keys()].filter(id => before.has(id));
+  const moved = dir => both.filter(id => dir * (RK[now.get(id)] - RK[before.get(id)]) > 0).map(id => ({ id, from: before.get(id), to: now.get(id) }));
+  return { snap, dPct: A.pct - snap.pct, dCov: A.tot.cov - snap.tot.cov, dGap: A.tot.gap - snap.tot.gap, better: moved(1), worse: moved(-1),
+    added: [...now.keys()].filter(id => !before.has(id)), removed: [...before.keys()].filter(id => !now.has(id)),
+    scen: new Map(A.scen.map(({ s }) => [s.id, snap.scen.find(x => x.ref === s.ref)?.pct])) };
+}
+const signed = n => (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(n);
+const SHOW = { all: t('Toutes les techniques'), scenario: t('Techniques des scénarios'), gap: t('Écarts uniquement'), cov: t('Couvertes uniquement') };
+const view = { q: '', sc: '', show: 'all', cmp: '' }; // filtres conservés tant que la page est ouverte ; cmp : '' = dernier instantané, 'none' = sans comparaison
+
+function render(root) {
+  const cm = coverageMap();
+  const parents = attack.techniques.filter(x => !x.id.includes('.'));
+  const relSet = () => new Set(state.scenarios.filter(s => !view.sc || s.id === view.sc).flatMap(s => s.techniques.map(parentOf)));
+  const kind = (te, rel) => { const k = status(cm, te.id); return k === 'gap' ? (rel.has(te.id) ? 'gap' : 'none') : k; };
+
+  const A = analysis(), total = A.nTech, D = A.diff;
+  const delta = (n, unit = '') => n ? ` <span class="${n > 0 ? 'ok' : 'err'}">(${signed(n)}${unit})</span>` : '';
+  const rowsHtml = A.scen.map(({ s, st, c, pct }) => `<tr><td><b class="tag sref">${sref(s)}</b> <b>${esc(s.name)}</b> <span class="tag">${esc(s.priority)}</span></td>
+      <td>${pct}%${D ? (D.scen.get(s.id) == null ? ` <span class="mut">(${t('nouveau')})</span>` : delta(pct - D.scen.get(s.id), ' pts')) : ''} <span class="mut">(${t('{c} couvertes, {p} partielles, {g} écarts', { c: c.cov, p: c.part, g: c.gap })})</span></td>
+      <td>${st.map(([id, k]) => `<span class="tag ${k}" title="${esc(tech(id)?.name)}">${id}</span>`).join('')}</td></tr>`).join('');
+  const dcs = id => sourcesOf(id).map(c => esc(c.name)).join(', ') || '<span class="mut">—</span>';
+  const gapRows = A.gaps.map(g => `<tr><td>${g.id} ${esc(g.name)}</td><td class="${g.k}">${LABEL[g.k]}</td><td>${g.scs.map(s => `<div><span class="tag sref">${sref(s)}</span> ${esc(s.name)}</div>`).join('')}</td><td class="mut">${dcs(g.id)}</td></tr>`).join('');
+  const srcRows = A.sources.slice(0, 15).map(c => `<tr><td><a href="https://attack.mitre.org/datacomponents/${c.id}/" target="_blank" rel="noopener">${c.id}</a> <b>${esc(c.name)}</b></td><td>${c.ids.length}</td><td>${PRIOL[c.p]}</td><td>${c.ids.map(id => `<span class="tag" title="${esc(tech(id)?.name)}">${id}</span>`).join('')}</td></tr>`).join('');
+  const snaps = state.snapshots || [], fmt = d => new Date(d).toLocaleDateString(locale);
+  const ids = (list, f) => list.map(x => `<span class="tag ${x.to || ''}" title="${esc(tech(x.id || x)?.name)}">${x.id || x}${f ? ` <small>${LABEL[x.from]} → ${LABEL[x.to]}</small>` : ''}</span>`).join('') || `<span class="mut">${t('Aucune.')}</span>`;
+  const evo = !snaps.length ? `<p class="mut">${t('Fige un instantané (par exemple avant un atelier ou une campagne de création de règles) pour mesurer ensuite les progrès et les inclure dans le rapport.')}</p>`
+    : !D ? '' : `<div class="kpis"><div class="kpi"><b>${D.snap.pct}% → ${A.pct}%</b><span>${t('couverture')}${delta(D.dPct, ' pts')}</span></div>
+      <div class="kpi"><b>${signed(D.dCov)}</b><span>${t('techniques couvertes')}</span></div><div class="kpi"><b>${signed(D.dGap)}</b><span>${t('écarts')}</span></div></div>
+      <p><b>${t('Améliorées')} (${D.better.length})</b> ${ids(D.better, true)}</p><p><b>${t('Dégradées')} (${D.worse.length})</b> ${ids(D.worse, true)}</p>
+      ${D.added.length || D.removed.length ? `<p class="mut">${t('Périmètre : {a} technique(s) ajoutée(s), {r} retirée(s) depuis l’instantané.', { a: D.added.length, r: D.removed.length })}</p>` : ''}`;
+
+  root.innerHTML = `${state.rules.length || state.scenarios.length ? '' : `<div class="card"><b>${t('Aucune donnée.')}</b> ${t('Génère des scénarios et mappe des règles, ou')} <button id="demo" class="pri">${t('charge la démo complète')}</button></div>`}
+  <div class="bar"><button id="rep" class="pri">${t('Rapport client (PDF)')}</button><button id="reph">${t('Rapport (HTML)')}</button><button id="xlsx">${t('Classeur Excel')}</button><button id="nav">${t('Couche Navigator')}</button><button id="navz">${t('Couches Navigator par scénario (.zip)')}</button><button id="csv">${t('CSV (règles)')}</button>
+    <span class="mut">${t('{r} règles · {s} scénarios · {n} techniques de scénario', { r: state.rules.length, s: state.scenarios.length, n: total })}</span></div>
+  <h2>${t('Matrice ATT&CK')}</h2>
+  <div class="mtools">
+    <input id="q" type="search" placeholder="${t('Chercher T1059 ou « credential »')}" aria-label="${t('Chercher une technique')}">
+    <select id="msc" aria-label="${t('Scénario')}"><option value="">${t('Tous les scénarios')}</option>${state.scenarios.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select>
+    <select id="mshow" aria-label="${t('Afficher')}">${Object.entries(SHOW).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
+    <span id="legend"></span>
+  </div>
+  <div id="matrix" class="matrix"></div><aside id="detail" role="region" aria-label="${t('Détail de la technique')}"></aside>
+  <h2>${t('Évolution')}</h2>
+  <div class="bar"><button id="snap">${t('Figer un instantané')}</button>${snaps.length ? `<label for="cmp" style="margin:0">${t('Comparer avec')}</label><select id="cmp" style="width:auto"><option value="none">${t('Aucune comparaison')}</option>${snaps.map(x => `<option value="${x.id}" ${D?.snap === x ? 'selected' : ''}>${esc(x.label)} (${fmt(x.date)}, ${x.pct}%)</option>`).join('')}</select><button id="snapdel" ${D ? '' : 'disabled'}>${t('Supprimer cet instantané')}</button>` : ''}</div>
+  ${evo}
+  <h2>${t('Couverture par scénario')}</h2><table><thead><tr><th>${t('Scénario')}</th><th>${t('Couverture')}</th><th>${t('Techniques')}</th></tr></thead><tbody>${rowsHtml || `<tr><td colspan=3 class="mut">${t('Aucun scénario')}</td></tr>`}</tbody></table>
+  <h2>${t('Écarts priorisés')}</h2><table><thead><tr><th>${t('Technique')}</th><th>${t('Statut')}</th><th>${t('Scénarios concernés')}</th><th>${t('Sources de données (ATT&CK)')}</th></tr></thead><tbody>${gapRows || `<tr><td colspan=4 class="mut">${t('Aucun écart')}</td></tr>`}</tbody></table>
+  ${srcRows ? `<h2>${t('Sources de données à prioriser')}</h2><p class="mut">${t('Composants de données ATT&CK nécessaires pour détecter les écarts, classés par nombre d’écarts et priorité des scénarios. À confronter aux journaux réellement collectés.')}</p>
+  <table><thead><tr><th>${t('Composant de données')}</th><th>${t('Écarts')}</th><th>${t('Priorité max.')}</th><th>${t('Techniques concernées')}</th></tr></thead><tbody>${srcRows}</tbody></table>` : ''}`;
+
+  function drawMatrix() {
+    const rel = relSet(), q = view.q.trim().toLowerCase(), n = { cov: 0, part: 0, gap: 0 };
+    for (const te of parents) { const k = kind(te, rel); if (rel.has(te.id) && k !== 'none') n[k]++; }
+    const keep = (te, k) => (!q || (te.id + ' ' + te.name).toLowerCase().includes(q))
+      && (view.show === 'all' || (view.show === 'scenario' && rel.has(te.id)) || (view.show === 'gap' && k === 'gap') || (view.show === 'cov' && k === 'cov'));
+    const cols = attack.tactics.map(tc => {
+      const all = parents.filter(te => te.tactics.includes(tc.short));
+      const relAll = all.filter(te => rel.has(te.id)), relCov = relAll.filter(te => kind(te, rel) === 'cov');
+      const cells = all.filter(te => keep(te, kind(te, rel)));
+      if (!cells.length && (view.show !== 'all' || q)) return '';
+      return `<div class="col"><h3>${esc(tc.name)}${relAll.length ? `<span title="${t('Techniques de scénario couvertes dans cette tactique')}">${relCov.length}/${relAll.length}</span>` : ''}</h3>${cells.map(te => {
+        const k = kind(te, rel), e = cm.get(te.id);
+        return `<button class="cell ${k} ${rel.has(te.id) ? 'rel' : ''}" data-id="${te.id}" aria-label="${te.id} ${esc(te.name)} : ${LABEL[k] || t('hors scénarios')}${e ? ', ' + t('{n} règle(s)', { n: e.n }) : ''}"><b>${te.id}</b>${e ? `<i>×${e.n}</i>` : ''}<span>${esc(te.name)}</span></button>`;
+      }).join('')}</div>`;
+    }).join('');
+    $(root, '#matrix').innerHTML = cols || `<p class="mut" style="padding:1rem">${t('Aucune technique ne correspond à ces filtres.')}</p>`;
+    $(root, '#legend').innerHTML = `<span class="lg cov">${t('Couvert')} ${n.cov}</span><span class="lg part">${t('Partiel')} ${n.part}</span><span class="lg gap">${t('Écart')} ${n.gap}</span><span class="lg none">${t('Hors scénarios')}</span>`;
+  }
+
+  function openDetail(id) {
+    const te = parents.find(x => x.id === id), e = cm.get(id), k = kind(te, relSet());
+    const scs = state.scenarios.filter(s => s.techniques.some(x => parentOf(x) === id));
+    const subs = attack.techniques.filter(x => x.id.startsWith(id + '.'));
+    const st = { cov: ['cov', t('Couvert')], part: ['part', t('Partiel')], gap: ['gap', t('Écart : aucune règle')], none: ['', t('Non couvert, hors scénarios')] }[k];
+    const rules = e ? e.items.map(r => `<div class="item"><b>${esc(r.name)}</b><div class="mut">${r.techniques.map(x => `<span class="tag">${x}</span>`).join('')} ${esc(r.confidence || '')}${r.stage ? ' · ' + esc(r.stage) : ''}</div></div>`).join('') : `<p class="mut">${t('Aucune règle ne cible cette technique.')}</p>`;
+    const scn = scs.map(s => `<div class="item">${esc(s.name)} <span class="tag">${esc(s.priority)}</span></div>`).join('') || `<p class="mut">${t('Aucun scénario ne l’utilise.')}</p>`;
+    const sub = subs.map(x => { const c = cm.get(x.id); return `<div class="item sub"><span class="tag ${c ? (c.best >= 2 ? 'cov' : 'part') : ''}">${x.id}</span> ${esc(x.name)}${c ? ` <span class="mut">×${c.n}</span>` : ''}</div>`; }).join('') || `<p class="mut">${t('Aucune.')}</p>`;
+    const d = $(root, '#detail');
+    d.innerHTML = `<button class="x" aria-label="${t('Fermer')}">×</button><h3>${id} ${esc(te.name)}</h3>
+      <p><span class="tag ${st[0]}">${st[1]}</span> <a href="https://attack.mitre.org/techniques/${id}/" target="_blank" rel="noopener">${t('Fiche MITRE')}</a></p>
+      <h4>${t('Règles')} (${e ? e.items.length : 0})</h4>${rules}<h4>${t('Scénarios')} (${scs.length})</h4>${scn}<h4>${t('Sources de données (ATT&CK)')}</h4>${sourcesOf(id).map(c => `<div class="item"><a href="https://attack.mitre.org/datacomponents/${c.id}/" target="_blank" rel="noopener">${c.id}</a> ${esc(c.name)}</div>`).join('') || `<p class="mut">${t('Aucune stratégie de détection MITRE pour cette technique.')}</p>`}<h4>${t('Sous-techniques ({n}/{m} couvertes)', { n: subs.filter(x => (cm.get(x.id)?.exact || 0) >= 2).length, m: subs.length })}</h4>${sub}`;
+    d.classList.add('open'); $(d, '.x').focus();
+  }
+
+  $(root, '#q').value = view.q; $(root, '#msc').value = view.sc; $(root, '#mshow').value = view.show;
+  $(root, '#q').oninput = e => { view.q = e.target.value; drawMatrix(); };
+  $(root, '#msc').onchange = e => { view.sc = e.target.value; drawMatrix(); };
+  $(root, '#mshow').onchange = e => { view.show = e.target.value; drawMatrix(); };
+  let opened = '';
+  // fermeture du volet : le focus revient sur la cellule d'origine (navigation clavier)
+  const close = () => { $(root, '#detail').classList.remove('open'); root.querySelector(`.cell[data-id="${opened}"]`)?.focus(); };
+  $(root, '#matrix').onclick = e => { const c = e.target.closest('.cell'); if (c) openDetail(opened = c.dataset.id); };
+  $(root, '#detail').onclick = e => { if (e.target.classList.contains('x')) close(); };
+  root.onkeydown = e => { if (e.key === 'Escape' && $(root, '#detail').classList.contains('open')) close(); };
+  drawMatrix();
+  $(root, '#snap').onclick = () => {
+    const label = prompt(t('Nom de l’instantané'), t('Instantané du {date}', { date: new Date().toLocaleDateString(locale) }));
+    if (label === null) return;
+    (state.snapshots ||= []).push(snapshot(analysis(), label.trim().slice(0, 100) || fmt(Date.now()))); view.cmp = ''; save(); render(root);
+  };
+  if (snaps.length) {
+    $(root, '#cmp').onchange = e => { view.cmp = e.target.value; render(root); };
+    $(root, '#snapdel').onclick = () => { const x = D.snap; undoable(t('Instantané « {name} » supprimé.', { name: x.label }), () => { state.snapshots = snaps.filter(y => y !== x); view.cmp = ''; save(); render(root); }); };
+  }
+  const demo = $(root, '#demo'); if (demo) demo.onclick = async () => { await loadDemo(); showProject(); render(root); };
+
+  const slug = state.name.normalize('NFD').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'projet';
+  const html = () => new Blob([reportHtml(analysis())], { type: 'text/html' });
+  $(root, '#rep').onclick = () => { const w = window.open(URL.createObjectURL(html())); if (!w) alert(t('Fenêtre bloquée : autorise les pop-ups ou utilise « Rapport (HTML) ».')); };
+  $(root, '#reph').onclick = () => download(`mitremapper-${t('rapport')}-${slug}.html`, html());
+  $(root, '#xlsx').onclick = () => download(`mitremapper-${slug}.xlsx`, workbook(analysis()));
+  // couche du scénario sélectionné dans le filtre, sinon couche globale
+  $(root, '#nav').onclick = () => { const s = state.scenarios.find(x => x.id === view.sc); exportJson(`mitremapper-layer-${s ? sref(s) : 'global'}.json`, layer(analysis(), s)); };
+  $(root, '#navz').onclick = () => download(`mitremapper-layers-${slug}.zip`, layersZip(analysis()));
+  $(root, '#csv').onclick = () => {
+    const q = v => `"${String(v ?? '').replace(/^[=+\-@\t\r]/, "'$&").replace(/"/g, '""')}"` // préfixe ' : pas de formule exécutée par Excel, sc = id => state.scenarios.find(s => s.id === id)?.name;
+    exportJson('mitremapper-rules.csv', [t('règle,source,techniques,scénarios,étape,confiance,note'),
+      ...state.rules.map(r => [r.name, r.source, r.techniques.join(' '), r.scenarios.map(sc).join(' | '), r.stage, r.confidence, r.note].map(q).join(','))].join('\n'));
+  };
+}
+
+return { coverageMap, status, LABEL, analysis, snapshot, compare, signed, render };
+})();
+__m.home = (() => {
+// Accueil : le parcours en 3 étapes et l'état du projet courant, pour s'orienter sans connaître l'outil.
+const { state, loadDemo, sref } = __m.store;
+const { PROVIDERS } = __m.llm;
+const { isAuthorized } = __m.keys;
+const { analysis } = __m.coverage;
+const { esc, $, showProject } = __m.ui;
+const { t } = __m.i18n;
+const go = id => document.querySelector(`#tabs [data-id="${id}"]`)?.click();
+
+function render(root) {
+  const S = state.scenarios, R = state.rules, mapped = R.filter(r => r.mapped).length, reviewed = R.filter(r => r.reviewed).length;
+  const A = S.length && R.length ? analysis() : null, p = PROVIDERS[state.settings.provider];
+  // état d'une étape : done (faite), todo (à faire maintenant), wait (dépend d'une étape précédente)
+  const steps = [
+    { id: 'scenarios', n: 1, title: t('Scénarios de menace'), what: t('Profil du client et rapports CTI : l’IA propose les scénarios à couvrir, tu les relis.'),
+      k: S.length ? 'done' : 'todo', stat: S.length ? t('{n} scénario(s) : {list}', { n: S.length, list: S.slice(0, 4).map(sref).join(', ') + (S.length > 4 ? '…' : '') }) : t('Aucun scénario.') },
+    { id: 'rules', n: 2, title: t('Règles de détection'), what: t('Importe les règles (Sigma, KQL, SPL…) : mappées sur ATT&CK et sur les scénarios, par leurs tags ou par l’IA.'),
+      k: !R.length ? (S.length ? 'todo' : 'wait') : mapped < R.length || reviewed < R.length ? 'todo' : 'done', // relecture comprise
+      stat: R.length ? t('{n} règle(s), {m} mappée(s), {v} validée(s)', { n: R.length, m: mapped, v: reviewed }) : t('Aucune règle.') },
+    { id: 'coverage', n: 3, title: t('Couverture et livrables'), what: t('Matrice ATT&CK, écarts priorisés, sources de données, rapport client, Excel et couches Navigator.'),
+      k: A ? 'done' : 'wait', stat: A ? t('{pct} % des techniques des scénarios couvertes, {gap} écart(s)', { pct: A.pct, gap: A.tot.gap }) : t('Disponible quand scénarios et règles sont en place.') },
+  ];
+  const next = steps.find(s => s.k === 'todo');
+  const LBL = { done: t('Fait'), todo: t('À faire'), wait: t('En attente') };
+  root.innerHTML = `
+  <h2>${t('Projet « {name} »', { name: esc(state.name) })}</h2>
+  <p class="mut">${t('MITREMapper aide à vérifier qu’un client détecte les attaques qui le menacent : scénarios issus de la CTI, règles de détection mappées sur MITRE ATT&CK, couverture et écarts priorisés.')}</p>
+  <div class="steps">${steps.map(s => `<section class="card step ${s.k}${s === next ? ' next' : ''}">
+    <div class="sh"><b class="num">${s.n}</b><h3>${s.title}</h3><span class="pill ${s.k === 'done' ? 'ok' : s.k === 'todo' ? 'warn' : ''}">${LBL[s.k]}</span></div>
+    <p class="mut">${s.what}</p><p>${esc(s.stat)}</p>
+    <button data-go="${s.id}" class="${s === next ? 'pri' : ''}">${t('Ouvrir')} ${s.title.toLowerCase()}</button></section>`).join('')}</div>
+  <div class="card"><h3>${t('Intelligence artificielle')}</h3>
+    <p>${isAuthorized() ? `<span class="pill ok">${t('Autorisée pour cette session')}</span>` : `<span class="pill warn">${t('Non autorisée')}</span> ${t('les règles taguées sont mappées sans IA ; le reste attend l’autorisation.')}`}
+    <span class="mut">${t('Fournisseur : {p}, modèle {m}', { p: esc(t(p?.label || '')), m: esc(state.settings.model || '—') })}</span></p>
+    <button data-go="settings">${t('Paramètres')}</button></div>
+  ${S.length || R.length ? '' : `<div class="card"><b>${t('Première visite ?')}</b> ${t('La démo ouvre un projet complet (11 scénarios, 7 règles déjà mappés) sans appel à l’IA.')} <button id="demo" class="pri">${t('Ouvrir la démo')}</button></div>`}`;
+  root.onclick = e => { const id = e.target.closest('[data-go]')?.dataset.go; if (id) go(id); };
+  const d = $(root, '#demo'); if (d) d.onclick = async () => { try { await loadDemo(); showProject(); render(root); } catch (x) { alert(x.message); } };
+}
+
+return { render };
 })();
 __m.settings = (() => {
 const { state, save, exportJson, importProject, projectForExport, loadDemo, listProjects, openProject, newProject, deleteProject } = __m.store;
@@ -1122,417 +1579,18 @@ function render(root) {
 
 return { extractTechniques, tagDiff, common, linkState, render };
 })();
-__m.export = (() => {
-// Livrables client : rapport HTML imprimable (PDF), classeur Excel (.xlsx), couches ATT&CK Navigator.
-// Sans dépendance : le .xlsx et le .zip sont écrits ici (zip non compressé). A = analysis() de coverage.js.
-const { state, sref } = __m.store;
-const { attack, tech, sourcesOf } = __m.attack;
-const { esc } = __m.ui;
-const { t, lang, locale } = __m.i18n;
-const LBL = { cov: t('Couvert'), part: t('Partiel'), gap: t('Écart') };
-const PRIO = { high: t('Haute'), medium: t('Moyenne'), low: t('Basse') };
-const prio = p => PRIO[p] || p || '';
-const name = id => tech(id)?.name || '';
-const scName = id => state.scenarios.find(s => s.id === id);
-const yesNo = b => b ? t('oui') : t('non');
-const sgn = n => (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(n);
-const dcNames = id => sourcesOf(id).map(c => c.name).join(', ');
-const origin = r => r.by === 'tags' ? 'tags' : r.by === 'ia' ? t('IA') : '';
-
-/** Recommandation déterministe pour une technique de scénario non couverte. */
-function reco(A, g) {
-  if (g.k === 'gap') return t('Aucune détection : créer une règle pour cette technique.');
-  const e = A.cm.get(g.id);
-  if (!e) return t('Seule la technique parente est couverte : vérifier que la détection couvre cette sous-technique.');
-  if (e.best < 2) return t('Détection de confiance basse : renforcer ou compléter la règle existante.');
-  const subs = attack.techniques.filter(x => x.id.startsWith(g.id + '.'));
-  const ok = subs.filter(x => (A.cm.get(x.id)?.exact || 0) >= 2).length;
-  return t('Sous-techniques couvertes : {n}/{m} ; compléter les variantes utilisées par les scénarios.', { n: ok, m: subs.length });
-}
-
-/* ---------- ATT&CK Navigator ---------- */
-const versions = () => ({ layer: '4.5', navigator: '5.1.0', attack: String(attack.version).split('.')[0] });
-/** Couche globale (score = meilleure confiance) ou couche d'un scénario (3 couvert, 2 partiel, 1 écart). */
-function layer(A, s) {
-  if (!s) return {
-    name: `MITREMapper : ${state.name}`, description: t('Couverture globale : score = meilleure confiance des règles (1 basse, 2 moyenne, 3 haute)'),
-    versions: versions(), domain: 'enterprise-attack', gradient: { colors: ['#ef9f27', '#2f9e5b'], minValue: 1, maxValue: 3 },
-    techniques: [...A.cm].map(([techniqueID, e]) => ({ techniqueID, score: e.best, comment: e.rules.join('; ') })),
-  };
-  const x = A.scen.find(r => r.s === s), score = { gap: 1, part: 2, cov: 3 };
-  return {
-    name: `${sref(s)} ${s.name}`, description: t('Scénario {ref}, priorité {p} : 3 couvert, 2 partiel, 1 écart', { ref: sref(s), p: prio(s.priority) }),
-    versions: versions(), domain: 'enterprise-attack', gradient: { colors: ['#e24b4a', '#ef9f27', '#2f9e5b'], minValue: 1, maxValue: 3 },
-    techniques: x.st.map(([techniqueID, k]) => ({ techniqueID, score: score[k], comment: `${LBL[k]} : ${(A.cm.get(techniqueID)?.rules || []).join('; ') || t('aucune règle')}` })),
-  };
-}
-const layersZip = A => zip({
-  '00-global.json': JSON.stringify(layer(A), null, 1),
-  ...Object.fromEntries(A.scen.map(({ s }) => [`${sref(s)}.json`, JSON.stringify(layer(A, s), null, 1)])),
-});
-
-/* ---------- ZIP (méthode « stockée », sans compression) ---------- */
-const CRC = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
-const crc32 = b => { let c = ~0; for (const x of b) c = CRC[(c ^ x) & 255] ^ (c >>> 8); return ~c >>> 0; };
-function zip(files) {
-  const enc = new TextEncoder(), parts = [], central = [];
-  let off = 0;
-  for (const [fname, data] of Object.entries(files)) {
-    const n = enc.encode(fname), d = typeof data === 'string' ? enc.encode(data) : data, crc = crc32(d);
-    const h = new DataView(new ArrayBuffer(30));
-    [[0, 0x04034b50, 4], [4, 20, 2], [6, 0x0800, 2], [12, 0x21, 2], [14, crc, 4], [18, d.length, 4], [22, d.length, 4], [26, n.length, 2]]
-      .forEach(([o, v, z]) => z === 4 ? h.setUint32(o, v, true) : h.setUint16(o, v, true));
-    const c = new DataView(new ArrayBuffer(46));
-    [[0, 0x02014b50, 4], [4, 20, 2], [6, 20, 2], [8, 0x0800, 2], [14, 0x21, 2], [16, crc, 4], [20, d.length, 4], [24, d.length, 4], [28, n.length, 2], [42, off, 4]]
-      .forEach(([o, v, z]) => z === 4 ? c.setUint32(o, v, true) : c.setUint16(o, v, true));
-    parts.push(h, n, d); central.push(c, n);
-    off += 30 + n.length + d.length;
-  }
-  const size = central.reduce((a, x) => a + x.byteLength, 0), count = central.length / 2, e = new DataView(new ArrayBuffer(22));
-  e.setUint32(0, 0x06054b50, true); e.setUint16(8, count, true); e.setUint16(10, count, true); e.setUint32(12, size, true); e.setUint32(16, off, true);
-  return new Blob([...parts, ...central, e], { type: 'application/zip' });
-}
-
-/* ---------- Excel (.xlsx) ---------- */
-const xesc = v => String(v ?? '').slice(0, 32000).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const colName = i => { let s = ''; for (i++; i; i = (i - 1) / 26 | 0) s = String.fromCharCode(65 + (i - 1) % 26) + s; return s; };
-function sheet(rows, widths) {
-  const cell = (v, r, c) => {
-    const ref = colName(c) + (r + 1), st = r === 0 ? ' s="1"' : '';
-    return typeof v === 'number' ? `<c r="${ref}"${st}><v>${v}</v></c>` : `<c r="${ref}" t="inlineStr"${st}><is><t xml:space="preserve">${xesc(v)}</t></is></c>`;
-  };
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`
-    + `<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>`
-    + `<cols>${widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('')}</cols>`
-    + `<sheetData>${rows.map((row, r) => `<row r="${r + 1}">${row.map((v, c) => cell(v, r, c)).join('')}</row>`).join('')}</sheetData></worksheet>`;
-}
-function workbook(A) {
-  const c = state.client, refs = ids => ids.map(scName).filter(Boolean).map(sref).join(' '), rel = new Set(A.scen.flatMap(x => x.st.map(([id]) => id)));
-  const sheets = {
-    [t('Synthèse')]: [[[t('Indicateur'), t('Valeur')], [t('Projet'), state.name], [t('Date'), new Date().toLocaleDateString(locale)], [t('Référentiel'), `ATT&CK Enterprise v${attack.version}`],
-      [t('Secteur'), c.sector], [t('Taille'), c.size], [t('Pays / zones'), c.country], [t('Actifs clés'), c.assets],
-      [t('Scénarios'), state.scenarios.length], [t('Règles'), state.rules.length], [t('Règles validées'), state.rules.filter(r => r.reviewed).length],
-      [t('Techniques de scénario'), A.nTech], [t('Couvertes'), A.tot.cov], [t('Partielles'), A.tot.part], [t('Écarts'), A.tot.gap], [t('Couverture globale (%)'), A.pct]], [28, 60]],
-    [t('Scénarios')]: [[[t('Réf'), t('Scénario'), t('Priorité'), t('Acteurs'), t('Résumé'), t('Techniques'), t('Couvertes'), t('Partielles'), t('Écarts'), t('Couverture (%)'), t('Règles liées')],
-      ...A.scen.map(({ s, c: n, pct }) => [sref(s), s.name, prio(s.priority), s.actors || '', s.summary || '', s.techniques.join(' '), n.cov, n.part, n.gap, pct,
-        state.rules.filter(r => r.scenarios.includes(s.id)).length])], [6, 45, 10, 25, 60, 40, 11, 11, 8, 14, 12]],
-    [t('Écarts')]: [[[t('Technique'), t('Nom'), t('Statut'), t('Priorité'), t('Scénarios'), t('Recommandation'), t('Sources de données (ATT&CK)')],
-      ...A.gaps.map(g => [g.id, g.name, LBL[g.k], prio(['high', 'medium', 'low'][g.p]), g.scs.map(sref).join(' '), reco(A, g), dcNames(g.id)])], [12, 40, 10, 10, 22, 80, 60]],
-    [t('Sources de données')]: [[[t('Composant'), t('Nom'), t('Écarts'), t('Priorité max.'), t('Techniques concernées')],
-      ...A.sources.map(c => [c.id, c.name, c.ids.length, prio(['high', 'medium', 'low'][c.p]), c.ids.join(' ')])], [12, 40, 9, 14, 80]],
-    [t('Règles')]: [[[t('Règle'), t('Source'), t('Origine'), t('Techniques'), t('Scénarios'), t('Étape'), t('Confiance'), t('Validée'), t('Note')],
-      ...state.rules.map(r => [r.name, r.source, origin(r), r.techniques.join(' '), refs(r.scenarios), r.stage || '', r.confidence || '', yesNo(r.reviewed), r.note || ''])],
-      [45, 16, 9, 30, 22, 14, 11, 9, 70]],
-    [t('Techniques')]: [[[t('Technique'), t('Nom'), t('Tactiques'), t('Statut'), t('Dans un scénario'), t('Nb règles'), t('Règles')],
-      ...attack.techniques.filter(x => rel.has(x.id) || A.cm.has(x.id)).map(x => {
-        const k = A.status(x.id), e = A.cm.get(x.id);
-        return [x.id, x.name, x.tactics.join(', '), k === 'gap' && !rel.has(x.id) ? '' : LBL[k], yesNo(rel.has(x.id)), e ? e.n : 0, e ? e.rules.join('; ') : ''];
-      })], [12, 40, 30, 10, 16, 10, 80]],
-  };
-  const D = A.diff;
-  if (D) sheets[t('Évolution')] = [[[t('Technique'), t('Nom'), t('Avant ({label})', { label: D.snap.label }), t('Maintenant')],
-    ...[...D.better, ...D.worse].map(x => [x.id, name(x.id), LBL[x.from], LBL[x.to]]),
-    ...D.added.map(id => [id, name(id), t('hors périmètre'), LBL[A.status(id)]]), ...D.removed.map(id => [id, name(id), LBL[D.snap.st[id]], t('hors périmètre')])], [12, 40, 22, 14]];
-  const names = Object.keys(sheets), ns = 'http://schemas.openxmlformats.org/';
-  const files = {
-    '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="${ns}package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${names.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`,
-    '_rels/.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${ns}package/2006/relationships"><Relationship Id="rId1" Type="${ns}officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
-    'xl/workbook.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="${ns}spreadsheetml/2006/main" xmlns:r="${ns}officeDocument/2006/relationships"><sheets>${names.map((n, i) => `<sheet name="${xesc(n)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>`,
-    'xl/_rels/workbook.xml.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${ns}package/2006/relationships">${names.map((_, i) => `<Relationship Id="rId${i + 1}" Type="${ns}officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}<Relationship Id="rId${names.length + 1}" Type="${ns}officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
-    'xl/styles.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="${ns}spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="2"><xf/><xf fontId="1" applyFont="1"/></cellXfs></styleSheet>`,
-    ...Object.fromEntries(names.map((n, i) => [`xl/worksheets/sheet${i + 1}.xml`, sheet(...sheets[n])])),
-  };
-  return new Blob([zip(files)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-}
-
-/* ---------- Rapport client (HTML imprimable) ---------- */
-function reportHtml(A) {
-  const c = state.client, date = new Date().toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' });
-  const rel = new Set(A.scen.flatMap(x => x.st.map(([id]) => id.split('.')[0])));
-  const validated = state.rules.filter(r => r.reviewed).length;
-  const kpi = (v, l, cls = '') => `<div class="kpi ${cls}"><b>${v}</b><span>${l}</span></div>`;
-  const bar = n => { const tot = n.cov + n.part + n.gap || 1; return `<div class="bar">${['cov', 'part', 'gap'].map(k => n[k] ? `<i class="${k}" style="width:${100 * n[k] / tot}%"></i>` : '').join('')}</div>`; };
-  const parents = attack.techniques.filter(x => !x.id.includes('.'));
-  const cols = attack.tactics.map(tc => {
-    const cells = parents.filter(x => x.tactics.includes(tc.short)).map(x => [x, A.status(x.id)]).filter(([x, k]) => k !== 'gap' || rel.has(x.id));
-    return cells.length ? `<div class="col"><h4>${esc(tc.name)}</h4>${cells.map(([x, k]) => `<div class="cell ${k}${rel.has(x.id) ? ' rel' : ''}"><b>${x.id}</b> ${esc(x.name)}</div>`).join('')}</div>` : '';
-  }).join('');
-  const profile = [c.sector, c.size, c.country].filter(Boolean);
-  return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><title>${t('Couverture de détection : {name}', { name: esc(state.name) })}</title><style>
-:root{--ind:#451DC7;--ind8:#2D1380;--ink:#16121F;--mut:#6B6580;--line:#E6E4EE;--cov:#04F06A;--covt:#088A42;--part:#EF9F27;--partb:#FEF6E8;--gap:#E24B4A;--gapb:#FDF1F1}
-*{box-sizing:border-box}body{margin:0;font:11pt/1.5 Inter,'Segoe UI',system-ui,sans-serif;color:var(--ink);background:#fff}
-h1,h2,h3,h4{font-family:Poppins,'Segoe UI',system-ui,sans-serif;line-height:1.25}
-header{background:radial-gradient(120% 120% at 25% 15%,#5226E0 0%,#451DC7 38%,#2D1380 100%);color:#fff;padding:28px 36px}
-header h1{margin:0 0 6px;font-size:22pt}header p{margin:0;opacity:.85}
-main{padding:8px 36px 32px;max-width:1200px;margin:auto}h2{color:var(--ind);font-size:15pt;margin:28px 0 10px;border-bottom:2px solid var(--ind);padding-bottom:4px}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}.kpi{border:1px solid var(--line);border-radius:8px;padding:10px 12px}
-.kpi b{display:block;font:600 20pt Poppins,'Segoe UI',sans-serif;color:var(--ind8)}.kpi span{color:var(--mut);font-size:9.5pt}.kpi.cov b{color:var(--covt)}.kpi.part b{color:#8A4800}.kpi.gap b{color:var(--gap)}
-table{border-collapse:collapse;width:100%;font-size:9.5pt}th,td{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertical-align:top}th{color:var(--mut);font-weight:600;background:#F5F4F9}
-tr{break-inside:avoid}.ref{display:inline-block;background:var(--ind);color:#fff;border-radius:4px;padding:0 6px;font-weight:600;font-size:9pt}
-.bar{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--line);min-width:120px}.bar i{display:block}.bar .cov{background:var(--cov)}.bar .part{background:var(--part)}.bar .gap{background:var(--gap)}
-.st{font-weight:600}.st.cov{color:var(--covt)}.st.part{color:#8A4800}.st.gap{color:var(--gap)}
-.matrix{display:flex;flex-wrap:wrap;gap:6px}.col{width:150px}.col h4{margin:0 0 4px;font-size:9pt;color:var(--ind8);border-bottom:2px solid var(--ind)}
-.cell{font-size:7.5pt;line-height:1.25;padding:3px 4px;margin-bottom:2px;border:1px solid var(--line);border-radius:3px;break-inside:avoid}
-.cell.cov{background:var(--cov);border-color:var(--cov)}.cell.part{background:var(--partb);border-color:var(--part)}.cell.gap{background:var(--gapb);border-color:var(--gap)}.cell.rel{box-shadow:inset 3px 0 0 var(--ind)}
-.legend span{display:inline-block;margin-right:14px;font-size:9pt}.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
-.mut{color:var(--mut)}.noprint{position:fixed;top:12px;right:12px}.noprint button{font:600 10pt Inter,sans-serif;background:#fff;color:var(--ind);border:0;border-radius:999px;padding:8px 16px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.2)}
-@page{size:A4;margin:12mm}@page matrice{size:A4 landscape;margin:10mm}.pg-matrix{page:matrice;break-before:page}
-@media print{.noprint{display:none}header{-webkit-print-color-adjust:exact;print-color-adjust:exact}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}h2{break-after:avoid}}
-</style></head><body>
-<div class="noprint"><button onclick="print()">${t('Imprimer / PDF')}</button></div>
-<header><h1>${t('Couverture de détection : {name}', { name: esc(state.name) })}</h1>
-<p>${date} · ${t('Référentiel MITRE ATT&amp;CK Enterprise v{v}', { v: esc(attack.version) })}${profile.length ? ' · ' + esc(profile.join(' · ')) : ''}</p></header>
-<main>
-<h2>${t('Synthèse')}</h2>
-<div class="kpis">${kpi(A.pct + ' %', t('des techniques des scénarios couvertes'), 'cov')}${kpi(state.scenarios.length, t('scénarios de menace'))}${kpi(state.rules.length, t('règles analysées ({n} validées)', { n: validated }))}${kpi(A.tot.cov, t('techniques couvertes'), 'cov')}${kpi(A.tot.part, t('techniques partielles'), 'part')}${kpi(A.tot.gap, t('écarts de détection'), 'gap')}</div>
-<p>${t('Sur les {n} techniques ATT&amp;CK mobilisées par les {s} scénarios retenus{assets}, {cov} sont couvertes par au moins une règle fiable, {part} le sont partiellement et {gap} ne disposent d’aucune détection.', { n: A.nTech, s: state.scenarios.length, assets: c.assets ? t(' (actifs clés : {a})', { a: esc(c.assets) }) : '', cov: A.tot.cov, part: A.tot.part, gap: A.tot.gap })}${A.gaps.length ? ' ' + t('Les {n} actions prioritaires portent sur {list}.', { n: Math.min(5, A.gaps.length), list: A.gaps.slice(0, 5).map(g => `${g.id} (${esc(g.name)})`).join(', ') }) : ''}</p>
-
-${A.diff ? (D => `<h2>${t('Évolution depuis « {label} » ({date})', { label: esc(D.snap.label), date: new Date(D.snap.date).toLocaleDateString(locale) })}</h2>
-<div class="kpis">${kpi(`${D.snap.pct} → ${A.pct} %`, t('couverture ({d} pts)', { d: sgn(D.dPct) }), D.dPct >= 0 ? 'cov' : 'gap')}${kpi(sgn(D.dCov), t('techniques couvertes'), 'cov')}${kpi(sgn(D.dGap), t('écarts de détection'), 'gap')}${kpi(D.better.length, t('techniques améliorées'))}${kpi(D.worse.length, t('techniques dégradées'), D.worse.length ? 'gap' : '')}</div>
-${D.better.length || D.worse.length ? `<table><thead><tr><th>${t('Technique')}</th><th>${t('Avant')}</th><th>${t('Maintenant')}</th></tr></thead><tbody>${[...D.better, ...D.worse].map(x => `<tr><td><b>${x.id}</b> ${esc(name(x.id))}</td><td class="st ${x.from}">${LBL[x.from]}</td><td class="st ${x.to}">${LBL[x.to]}</td></tr>`).join('')}</tbody></table>` : ''}`)(A.diff) : ''}
-<h2>${t('Couverture par scénario')}</h2>
-<table><thead><tr><th>${t('Réf')}</th><th>${t('Scénario')}</th><th>${t('Priorité')}</th><th>${t('Couverture')}</th><th></th><th>${t('Détail')}</th></tr></thead><tbody>
-${A.scen.map(({ s, c: n, pct }) => `<tr><td><span class="ref">${sref(s)}</span></td><td><b>${esc(s.name)}</b>${s.actors ? `<div class="mut">${esc(s.actors)}</div>` : ''}</td><td>${prio(s.priority)}</td><td>${bar(n)}</td><td><b>${pct} %</b></td><td class="mut">${t('{c} couvertes, {p} partielles, {g} écarts', { c: n.cov, p: n.part, g: n.gap })}</td></tr>`).join('')}
-</tbody></table>
-
-<h2>${t('Écarts prioritaires et recommandations')}</h2>
-${A.gaps.length ? `<table><thead><tr><th>${t('Technique')}</th><th>${t('Statut')}</th><th>${t('Priorité')}</th><th>${t('Scénarios')}</th><th>${t('Recommandation')}</th></tr></thead><tbody>
-${A.gaps.map(g => `<tr><td><b>${g.id}</b> ${esc(g.name)}</td><td class="st ${g.k}">${LBL[g.k]}</td><td>${prio(['high', 'medium', 'low'][g.p])}</td><td>${g.scs.map(s => `<span class="ref" title="${esc(s.name)}">${sref(s)}</span>`).join(' ')}</td><td>${esc(reco(A, g))}</td></tr>`).join('')}
-</tbody></table>` : `<p>${t('Aucun écart : toutes les techniques des scénarios sont couvertes.')}</p>`}
-
-${A.sources.length ? `<h2>${t('Sources de données à prioriser')}</h2>
-<p class="mut">${t('Composants de données MITRE ATT&amp;CK nécessaires pour détecter les écarts, classés par nombre d’écarts et priorité des scénarios. À confronter aux journaux réellement collectés.')}</p>
-<table><thead><tr><th>${t('Composant de données')}</th><th>${t('Écarts')}</th><th>${t('Priorité max.')}</th><th>${t('Techniques concernées')}</th></tr></thead><tbody>
-${A.sources.slice(0, 15).map(c => `<tr><td><b>${esc(c.name)}</b> <span class="mut">${c.id}</span></td><td>${c.ids.length}</td><td>${prio(['high', 'medium', 'low'][c.p])}</td><td>${c.ids.join(', ')}</td></tr>`).join('')}
-</tbody></table>` : ''}
-
-<section class="pg-matrix"><h2>${t('Matrice ATT&amp;CK')}</h2>
-<p class="legend"><span><i style="background:var(--cov)"></i>${t('Couvert')}</span><span><i style="background:var(--partb);border:1px solid var(--part)"></i>${t('Partiel')}</span><span><i style="background:var(--gapb);border:1px solid var(--gap)"></i>${t('Écart (technique d’un scénario)')}</span><span><i style="background:#fff;box-shadow:inset 3px 0 0 var(--ind);border:1px solid var(--line)"></i>${t('Technique d’un scénario')}</span></p>
-<div class="matrix">${cols}</div></section>
-
-<h2>${t('Inventaire des règles')}</h2>
-<table><thead><tr><th>${t('Règle')}</th><th>${t('Techniques')}</th><th>${t('Scénarios')}</th><th>${t('Étape')}</th><th>${t('Confiance')}</th><th>${t('Origine')}</th><th>${t('Validée')}</th></tr></thead><tbody>
-${state.rules.map(r => `<tr><td><b>${esc(r.name)}</b><div class="mut">${esc(r.source)}</div></td><td>${r.techniques.map(id => `<span title="${esc(name(id))}">${id}</span>`).join(', ')}</td><td>${r.scenarios.map(scName).filter(Boolean).map(s => `<span class="ref">${sref(s)}</span>`).join(' ')}</td><td>${esc(r.stage || '')}</td><td>${esc(r.confidence || '')}</td><td>${origin(r)}</td><td>${yesNo(r.reviewed)}</td></tr>`).join('')}
-</tbody></table>
-
-<h2>${t('Méthode et limites')}</h2>
-<ul>
-<li>${t('Scénarios dérivés de sources CTI et du profil client ; techniques validées contre le référentiel MITRE ATT&amp;CK Enterprise v{v}.', { v: esc(attack.version) })}</li>
-<li>${t('Règles mappées à partir de leurs tags ATT&amp;CK quand ils existent, sinon par analyse assistée par IA ; {n}/{m} règles relues et validées par un analyste.', { n: validated, m: state.rules.length })}</li>
-<li>${t('<b>Couvert</b> : règle de confiance moyenne ou haute sur la technique, ou sur toutes ses sous-techniques. <b>Partiel</b> : seulement certaines sous-techniques, confiance basse, ou seule la technique parente. <b>Écart</b> : aucune règle.')}</li>
-<li>${t('La couverture mesure l’existence de détections, pas leur efficacité opérationnelle (qualité des journaux, taux de faux positifs, délais de traitement).')}</li>
-</ul>
-<p class="mut">${t('Généré par MITREMapper (Wavestone) le {date}.', { date })}</p>
-</main></body></html>`;
-}
-
-return { reco, layer, layersZip, zip, workbook, reportHtml };
-})();
-__m.coverage = (() => {
-const { state, save, exportJson, download, loadDemo, sref, uid } = __m.store;
-const { attack, parentOf, tech, sourcesOf } = __m.attack;
-const { reportHtml, workbook, layer, layersZip } = __m.export;
-const { esc, $, showProject, undoable } = __m.ui;
-const { t, locale } = __m.i18n;
-const RANK = { low: 1, medium: 2, high: 3 };
-/** id -> {n, best, exact, rules[], items[]} : une règle sur une sous-technique compte aussi pour la parente ;
- *  exact = meilleure confiance des règles qui citent la technique elle-même. */
-function coverageMap(rules = state.rules) {
-  const m = new Map();
-  for (const r of rules) {
-    const c = RANK[r.confidence] || 2, ids = new Map(); // id -> cité exactement par la règle ?
-    for (const x of r.techniques) { ids.set(x, true); if (!ids.has(parentOf(x))) ids.set(parentOf(x), false); }
-    for (const [id, exact] of ids) {
-      const e = m.get(id) || { n: 0, best: 0, exact: 0, rules: [], items: [] };
-      e.n++; e.best = Math.max(e.best, c); if (exact) e.exact = Math.max(e.exact, c); e.rules.push(r.name); e.items.push(r); m.set(id, e);
-    }
-  }
-  return m;
-}
-const subsOf = id => attack.techniques.filter(x => x.id.startsWith(id + '.')).map(x => x.id);
-/** Statut d'une technique :
- *  cov  = règle medium+ sur la technique elle-même, ou toutes ses sous-techniques couvertes (medium+) ;
- *  part = seulement certaines sous-techniques, confiance basse, ou (pour une sous-technique) seule la parente est couverte ;
- *  gap  = aucune règle. */
-function status(cm, id) {
-  const e = cm.get(id);
-  if (!e) return id.includes('.') && cm.get(parentOf(id))?.exact ? 'part' : 'gap';
-  if (e.exact >= 2) return 'cov';
-  const subs = id.includes('.') ? [] : subsOf(id);
-  return subs.length && subs.every(s => (cm.get(s)?.exact || 0) >= 2) ? 'cov' : 'part';
-}
-const LABEL = { cov: t('couvert'), part: t('partiel'), gap: t('écart') };
-const PRIO = { high: 0, medium: 1, low: 2 }, PRIOL = [t('Haute'), t('Moyenne'), t('Basse')];
-/** Analyse partagée par l'écran et les exports : statuts par scénario, écarts priorisés, totaux. */
-function analysis() {
-  const cm = coverageMap();
-  const scen = state.scenarios.map(s => {
-    const st = s.techniques.map(id => [id, status(cm, id)]), c = { cov: 0, part: 0, gap: 0 };
-    st.forEach(([, k]) => c[k]++);
-    return { s, st, c, pct: s.techniques.length ? Math.round(100 * c.cov / s.techniques.length) : 0 };
-  });
-  const g = new Map();
-  for (const { s, st } of scen) for (const [id, k] of st) if (k !== 'cov') {
-    const x = g.get(id) || { id, name: tech(id)?.name || '', k, scs: [], p: 3 };
-    x.scs.push(s); x.p = Math.min(x.p, PRIO[s.priority] ?? 1); g.set(id, x);
-  }
-  const gaps = [...g.values()].sort((a, b) => a.p - b.p || (b.k === 'gap') - (a.k === 'gap') || b.scs.length - a.scs.length);
-  const uniq = new Map(scen.flatMap(x => x.st)), tot = { cov: 0, part: 0, gap: 0 };
-  uniq.forEach(k => tot[k]++);
-  const A = { cm, status: id => status(cm, id), scen, gaps, tot, nTech: uniq.size, pct: uniq.size ? Math.round(100 * tot.cov / uniq.size) : 0, sources: sourcesFor(gaps) };
-  const snap = state.snapshots?.find(x => x.id === view.cmp) || (view.cmp === '' ? state.snapshots?.at(-1) : null);
-  return Object.assign(A, { diff: snap ? compare(A, snap) : null });
-}
-/** Composants de données ATT&CK à prioriser : ceux qui servent au plus d'écarts, pondérés par la priorité des scénarios (high 3, medium 2, low 1). */
-function sourcesFor(gaps) {
-  const m = new Map();
-  for (const g of gaps) for (const c of sourcesOf(g.id)) {
-    const x = m.get(c.id) || { ...c, ids: [], p: 3, w: 0 };
-    x.ids.push(g.id); x.p = Math.min(x.p, g.p); x.w += 3 - g.p; m.set(c.id, x);
-  }
-  return [...m.values()].sort((a, b) => b.w - a.w || b.ids.length - a.ids.length || a.id.localeCompare(b.id));
-}
-/** Instantané figé de la couverture (statut de chaque technique de scénario) pour mesurer l'évolution. */
-const snapshot = (A, label) => ({ id: uid(), date: new Date().toISOString(), label, pct: A.pct, tot: { ...A.tot }, nTech: A.nTech,
-  st: Object.fromEntries(A.scen.flatMap(x => x.st)), scen: A.scen.map(({ s, pct }) => ({ ref: s.ref, name: s.name, pct })) });
-const RK = { gap: 0, part: 1, cov: 2 };
-/** Différence entre un instantané et l'état courant (techniques améliorées, dégradées, entrées ou sorties du périmètre, scénarios). */
-function compare(A, snap) {
-  const now = new Map(A.scen.flatMap(x => x.st)), before = new Map(Object.entries(snap.st)), both = [...now.keys()].filter(id => before.has(id));
-  const moved = dir => both.filter(id => dir * (RK[now.get(id)] - RK[before.get(id)]) > 0).map(id => ({ id, from: before.get(id), to: now.get(id) }));
-  return { snap, dPct: A.pct - snap.pct, dCov: A.tot.cov - snap.tot.cov, dGap: A.tot.gap - snap.tot.gap, better: moved(1), worse: moved(-1),
-    added: [...now.keys()].filter(id => !before.has(id)), removed: [...before.keys()].filter(id => !now.has(id)),
-    scen: new Map(A.scen.map(({ s }) => [s.id, snap.scen.find(x => x.ref === s.ref)?.pct])) };
-}
-const signed = n => (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(n);
-const SHOW = { all: t('Toutes les techniques'), scenario: t('Techniques des scénarios'), gap: t('Écarts uniquement'), cov: t('Couvertes uniquement') };
-const view = { q: '', sc: '', show: 'all', cmp: '' }; // filtres conservés tant que la page est ouverte ; cmp : '' = dernier instantané, 'none' = sans comparaison
-
-function render(root) {
-  const cm = coverageMap();
-  const parents = attack.techniques.filter(x => !x.id.includes('.'));
-  const relSet = () => new Set(state.scenarios.filter(s => !view.sc || s.id === view.sc).flatMap(s => s.techniques.map(parentOf)));
-  const kind = (te, rel) => { const k = status(cm, te.id); return k === 'gap' ? (rel.has(te.id) ? 'gap' : 'none') : k; };
-
-  const A = analysis(), total = A.nTech, D = A.diff;
-  const delta = (n, unit = '') => n ? ` <span class="${n > 0 ? 'ok' : 'err'}">(${signed(n)}${unit})</span>` : '';
-  const rowsHtml = A.scen.map(({ s, st, c, pct }) => `<tr><td><b class="tag sref">${sref(s)}</b> <b>${esc(s.name)}</b> <span class="tag">${esc(s.priority)}</span></td>
-      <td>${pct}%${D ? (D.scen.get(s.id) == null ? ` <span class="mut">(${t('nouveau')})</span>` : delta(pct - D.scen.get(s.id), ' pts')) : ''} <span class="mut">(${t('{c} couvertes, {p} partielles, {g} écarts', { c: c.cov, p: c.part, g: c.gap })})</span></td>
-      <td>${st.map(([id, k]) => `<span class="tag ${k}" title="${esc(tech(id)?.name)}">${id}</span>`).join('')}</td></tr>`).join('');
-  const dcs = id => sourcesOf(id).map(c => esc(c.name)).join(', ') || '<span class="mut">—</span>';
-  const gapRows = A.gaps.map(g => `<tr><td>${g.id} ${esc(g.name)}</td><td class="${g.k}">${LABEL[g.k]}</td><td>${g.scs.map(s => `<div><span class="tag sref">${sref(s)}</span> ${esc(s.name)}</div>`).join('')}</td><td class="mut">${dcs(g.id)}</td></tr>`).join('');
-  const srcRows = A.sources.slice(0, 15).map(c => `<tr><td><a href="https://attack.mitre.org/datacomponents/${c.id}/" target="_blank" rel="noopener">${c.id}</a> <b>${esc(c.name)}</b></td><td>${c.ids.length}</td><td>${PRIOL[c.p]}</td><td>${c.ids.map(id => `<span class="tag" title="${esc(tech(id)?.name)}">${id}</span>`).join('')}</td></tr>`).join('');
-  const snaps = state.snapshots || [], fmt = d => new Date(d).toLocaleDateString(locale);
-  const ids = (list, f) => list.map(x => `<span class="tag ${x.to || ''}" title="${esc(tech(x.id || x)?.name)}">${x.id || x}${f ? ` <small>${LABEL[x.from]} → ${LABEL[x.to]}</small>` : ''}</span>`).join('') || `<span class="mut">${t('Aucune.')}</span>`;
-  const evo = !snaps.length ? `<p class="mut">${t('Fige un instantané (par exemple avant un atelier ou une campagne de création de règles) pour mesurer ensuite les progrès et les inclure dans le rapport.')}</p>`
-    : !D ? '' : `<div class="kpis"><div class="kpi"><b>${D.snap.pct}% → ${A.pct}%</b><span>${t('couverture')}${delta(D.dPct, ' pts')}</span></div>
-      <div class="kpi"><b>${signed(D.dCov)}</b><span>${t('techniques couvertes')}</span></div><div class="kpi"><b>${signed(D.dGap)}</b><span>${t('écarts')}</span></div></div>
-      <p><b>${t('Améliorées')} (${D.better.length})</b> ${ids(D.better, true)}</p><p><b>${t('Dégradées')} (${D.worse.length})</b> ${ids(D.worse, true)}</p>
-      ${D.added.length || D.removed.length ? `<p class="mut">${t('Périmètre : {a} technique(s) ajoutée(s), {r} retirée(s) depuis l’instantané.', { a: D.added.length, r: D.removed.length })}</p>` : ''}`;
-
-  root.innerHTML = `${state.rules.length || state.scenarios.length ? '' : `<div class="card"><b>${t('Aucune donnée.')}</b> ${t('Génère des scénarios et mappe des règles, ou')} <button id="demo" class="pri">${t('charge la démo complète')}</button></div>`}
-  <div class="bar"><button id="rep" class="pri">${t('Rapport client (PDF)')}</button><button id="reph">${t('Rapport (HTML)')}</button><button id="xlsx">${t('Classeur Excel')}</button><button id="nav">${t('Couche Navigator')}</button><button id="navz">${t('Couches Navigator par scénario (.zip)')}</button><button id="csv">${t('CSV (règles)')}</button>
-    <span class="mut">${t('{r} règles · {s} scénarios · {n} techniques de scénario', { r: state.rules.length, s: state.scenarios.length, n: total })}</span></div>
-  <h2>${t('Matrice ATT&CK')}</h2>
-  <div class="mtools">
-    <input id="q" type="search" placeholder="${t('Chercher T1059 ou « credential »')}" aria-label="${t('Chercher une technique')}">
-    <select id="msc" aria-label="${t('Scénario')}"><option value="">${t('Tous les scénarios')}</option>${state.scenarios.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select>
-    <select id="mshow" aria-label="${t('Afficher')}">${Object.entries(SHOW).map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>
-    <span id="legend"></span>
-  </div>
-  <div id="matrix" class="matrix"></div><aside id="detail" role="region" aria-label="${t('Détail de la technique')}"></aside>
-  <h2>${t('Évolution')}</h2>
-  <div class="bar"><button id="snap">${t('Figer un instantané')}</button>${snaps.length ? `<label for="cmp" style="margin:0">${t('Comparer avec')}</label><select id="cmp" style="width:auto"><option value="none">${t('Aucune comparaison')}</option>${snaps.map(x => `<option value="${x.id}" ${D?.snap === x ? 'selected' : ''}>${esc(x.label)} (${fmt(x.date)}, ${x.pct}%)</option>`).join('')}</select><button id="snapdel" ${D ? '' : 'disabled'}>${t('Supprimer cet instantané')}</button>` : ''}</div>
-  ${evo}
-  <h2>${t('Couverture par scénario')}</h2><table><thead><tr><th>${t('Scénario')}</th><th>${t('Couverture')}</th><th>${t('Techniques')}</th></tr></thead><tbody>${rowsHtml || `<tr><td colspan=3 class="mut">${t('Aucun scénario')}</td></tr>`}</tbody></table>
-  <h2>${t('Écarts priorisés')}</h2><table><thead><tr><th>${t('Technique')}</th><th>${t('Statut')}</th><th>${t('Scénarios concernés')}</th><th>${t('Sources de données (ATT&CK)')}</th></tr></thead><tbody>${gapRows || `<tr><td colspan=4 class="mut">${t('Aucun écart')}</td></tr>`}</tbody></table>
-  ${srcRows ? `<h2>${t('Sources de données à prioriser')}</h2><p class="mut">${t('Composants de données ATT&CK nécessaires pour détecter les écarts, classés par nombre d’écarts et priorité des scénarios. À confronter aux journaux réellement collectés.')}</p>
-  <table><thead><tr><th>${t('Composant de données')}</th><th>${t('Écarts')}</th><th>${t('Priorité max.')}</th><th>${t('Techniques concernées')}</th></tr></thead><tbody>${srcRows}</tbody></table>` : ''}`;
-
-  function drawMatrix() {
-    const rel = relSet(), q = view.q.trim().toLowerCase(), n = { cov: 0, part: 0, gap: 0 };
-    for (const te of parents) { const k = kind(te, rel); if (rel.has(te.id) && k !== 'none') n[k]++; }
-    const keep = (te, k) => (!q || (te.id + ' ' + te.name).toLowerCase().includes(q))
-      && (view.show === 'all' || (view.show === 'scenario' && rel.has(te.id)) || (view.show === 'gap' && k === 'gap') || (view.show === 'cov' && k === 'cov'));
-    const cols = attack.tactics.map(tc => {
-      const all = parents.filter(te => te.tactics.includes(tc.short));
-      const relAll = all.filter(te => rel.has(te.id)), relCov = relAll.filter(te => kind(te, rel) === 'cov');
-      const cells = all.filter(te => keep(te, kind(te, rel)));
-      if (!cells.length && (view.show !== 'all' || q)) return '';
-      return `<div class="col"><h3>${esc(tc.name)}${relAll.length ? `<span title="${t('Techniques de scénario couvertes dans cette tactique')}">${relCov.length}/${relAll.length}</span>` : ''}</h3>${cells.map(te => {
-        const k = kind(te, rel), e = cm.get(te.id);
-        return `<button class="cell ${k} ${rel.has(te.id) ? 'rel' : ''}" data-id="${te.id}" aria-label="${te.id} ${esc(te.name)} : ${LABEL[k] || t('hors scénarios')}${e ? ', ' + t('{n} règle(s)', { n: e.n }) : ''}"><b>${te.id}</b>${e ? `<i>×${e.n}</i>` : ''}<span>${esc(te.name)}</span></button>`;
-      }).join('')}</div>`;
-    }).join('');
-    $(root, '#matrix').innerHTML = cols || `<p class="mut" style="padding:1rem">${t('Aucune technique ne correspond à ces filtres.')}</p>`;
-    $(root, '#legend').innerHTML = `<span class="lg cov">${t('Couvert')} ${n.cov}</span><span class="lg part">${t('Partiel')} ${n.part}</span><span class="lg gap">${t('Écart')} ${n.gap}</span><span class="lg none">${t('Hors scénarios')}</span>`;
-  }
-
-  function openDetail(id) {
-    const te = parents.find(x => x.id === id), e = cm.get(id), k = kind(te, relSet());
-    const scs = state.scenarios.filter(s => s.techniques.some(x => parentOf(x) === id));
-    const subs = attack.techniques.filter(x => x.id.startsWith(id + '.'));
-    const st = { cov: ['cov', t('Couvert')], part: ['part', t('Partiel')], gap: ['gap', t('Écart : aucune règle')], none: ['', t('Non couvert, hors scénarios')] }[k];
-    const rules = e ? e.items.map(r => `<div class="item"><b>${esc(r.name)}</b><div class="mut">${r.techniques.map(x => `<span class="tag">${x}</span>`).join('')} ${esc(r.confidence || '')}${r.stage ? ' · ' + esc(r.stage) : ''}</div></div>`).join('') : `<p class="mut">${t('Aucune règle ne cible cette technique.')}</p>`;
-    const scn = scs.map(s => `<div class="item">${esc(s.name)} <span class="tag">${esc(s.priority)}</span></div>`).join('') || `<p class="mut">${t('Aucun scénario ne l’utilise.')}</p>`;
-    const sub = subs.map(x => { const c = cm.get(x.id); return `<div class="item sub"><span class="tag ${c ? (c.best >= 2 ? 'cov' : 'part') : ''}">${x.id}</span> ${esc(x.name)}${c ? ` <span class="mut">×${c.n}</span>` : ''}</div>`; }).join('') || `<p class="mut">${t('Aucune.')}</p>`;
-    const d = $(root, '#detail');
-    d.innerHTML = `<button class="x" aria-label="${t('Fermer')}">×</button><h3>${id} ${esc(te.name)}</h3>
-      <p><span class="tag ${st[0]}">${st[1]}</span> <a href="https://attack.mitre.org/techniques/${id}/" target="_blank" rel="noopener">${t('Fiche MITRE')}</a></p>
-      <h4>${t('Règles')} (${e ? e.items.length : 0})</h4>${rules}<h4>${t('Scénarios')} (${scs.length})</h4>${scn}<h4>${t('Sources de données (ATT&CK)')}</h4>${sourcesOf(id).map(c => `<div class="item"><a href="https://attack.mitre.org/datacomponents/${c.id}/" target="_blank" rel="noopener">${c.id}</a> ${esc(c.name)}</div>`).join('') || `<p class="mut">${t('Aucune stratégie de détection MITRE pour cette technique.')}</p>`}<h4>${t('Sous-techniques ({n}/{m} couvertes)', { n: subs.filter(x => (cm.get(x.id)?.exact || 0) >= 2).length, m: subs.length })}</h4>${sub}`;
-    d.classList.add('open'); $(d, '.x').focus();
-  }
-
-  $(root, '#q').value = view.q; $(root, '#msc').value = view.sc; $(root, '#mshow').value = view.show;
-  $(root, '#q').oninput = e => { view.q = e.target.value; drawMatrix(); };
-  $(root, '#msc').onchange = e => { view.sc = e.target.value; drawMatrix(); };
-  $(root, '#mshow').onchange = e => { view.show = e.target.value; drawMatrix(); };
-  let opened = '';
-  // fermeture du volet : le focus revient sur la cellule d'origine (navigation clavier)
-  const close = () => { $(root, '#detail').classList.remove('open'); root.querySelector(`.cell[data-id="${opened}"]`)?.focus(); };
-  $(root, '#matrix').onclick = e => { const c = e.target.closest('.cell'); if (c) openDetail(opened = c.dataset.id); };
-  $(root, '#detail').onclick = e => { if (e.target.classList.contains('x')) close(); };
-  root.onkeydown = e => { if (e.key === 'Escape' && $(root, '#detail').classList.contains('open')) close(); };
-  drawMatrix();
-  $(root, '#snap').onclick = () => {
-    const label = prompt(t('Nom de l’instantané'), t('Instantané du {date}', { date: new Date().toLocaleDateString(locale) }));
-    if (label === null) return;
-    (state.snapshots ||= []).push(snapshot(analysis(), label.trim().slice(0, 100) || fmt(Date.now()))); view.cmp = ''; save(); render(root);
-  };
-  if (snaps.length) {
-    $(root, '#cmp').onchange = e => { view.cmp = e.target.value; render(root); };
-    $(root, '#snapdel').onclick = () => { const x = D.snap; undoable(t('Instantané « {name} » supprimé.', { name: x.label }), () => { state.snapshots = snaps.filter(y => y !== x); view.cmp = ''; save(); render(root); }); };
-  }
-  const demo = $(root, '#demo'); if (demo) demo.onclick = async () => { await loadDemo(); showProject(); render(root); };
-
-  const slug = state.name.normalize('NFD').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'projet';
-  const html = () => new Blob([reportHtml(analysis())], { type: 'text/html' });
-  $(root, '#rep').onclick = () => { const w = window.open(URL.createObjectURL(html())); if (!w) alert(t('Fenêtre bloquée : autorise les pop-ups ou utilise « Rapport (HTML) ».')); };
-  $(root, '#reph').onclick = () => download(`mitremapper-${t('rapport')}-${slug}.html`, html());
-  $(root, '#xlsx').onclick = () => download(`mitremapper-${slug}.xlsx`, workbook(analysis()));
-  // couche du scénario sélectionné dans le filtre, sinon couche globale
-  $(root, '#nav').onclick = () => { const s = state.scenarios.find(x => x.id === view.sc); exportJson(`mitremapper-layer-${s ? sref(s) : 'global'}.json`, layer(analysis(), s)); };
-  $(root, '#navz').onclick = () => download(`mitremapper-layers-${slug}.zip`, layersZip(analysis()));
-  $(root, '#csv').onclick = () => {
-    const q = v => `"${String(v ?? '').replace(/^[=+\-@\t\r]/, "'$&").replace(/"/g, '""')}"` // préfixe ' : pas de formule exécutée par Excel, sc = id => state.scenarios.find(s => s.id === id)?.name;
-    exportJson('mitremapper-rules.csv', [t('règle,source,techniques,scénarios,étape,confiance,note'),
-      ...state.rules.map(r => [r.name, r.source, r.techniques.join(' '), r.scenarios.map(sc).join(' | '), r.stage, r.confidence, r.note].map(q).join(','))].join('\n'));
-  };
-}
-
-return { coverageMap, status, LABEL, analysis, snapshot, compare, signed, render };
-})();
 const { loadAttack, attack } = __m.attack;
 const { showProject } = __m.ui;
 const { state, save, upgradeIds } = __m.store;
 const { t, lang, setLang } = __m.i18n;
+const home = __m.home;
 const settings = __m.settings;
 const scenarios = __m.scenarios;
 const mapping = __m.mapping;
 const coverage = __m.coverage;
 // id d'onglet (ancre d'URL) -> [module, libellé] ; les anciennes ancres françaises restent acceptées
-const views = { scenarios: [scenarios, t('Scénarios')], rules: [mapping, t('Règles')], coverage: [coverage, t('Couverture')], settings: [settings, t('Paramètres')] };
-const legacy = { 'Scénarios': 'scenarios', 'Règles': 'rules', 'Couverture': 'coverage', 'Paramètres': 'settings' };
+const views = { home: [home, t('Accueil')], scenarios: [scenarios, t('Scénarios')], rules: [mapping, t('Règles')], coverage: [coverage, t('Couverture')], settings: [settings, t('Paramètres')] };
+const legacy = { 'Accueil': 'home', 'Scénarios': 'scenarios', 'Règles': 'rules', 'Couverture': 'coverage', 'Paramètres': 'settings' };
 const tabs = document.getElementById('tabs'), view = document.getElementById('view');
 function show(id) {
   [...tabs.children].forEach(b => { const on = b.dataset.id === id; b.classList.toggle('on', on); on ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current'); });
@@ -1554,7 +1612,7 @@ await loadAttack();
 upgradeIds(state); save(); // projet enregistré avec une version précédente d'ATT&CK : IDs révoqués convertis
 document.getElementById('ver').textContent = `ATT&CK Enterprise v${attack.version}`;
 const h = decodeURIComponent(location.hash.slice(1));
-show(views[h] ? h : legacy[h] || 'settings');
+show(views[h] ? h : legacy[h] || 'home');
 
 </script>
 </body>
