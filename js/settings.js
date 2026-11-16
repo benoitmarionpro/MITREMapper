@@ -24,7 +24,7 @@ export function render(root) {
     <div><label for="prov">${t('Fournisseur')}</label><select id="prov">${Object.entries(PROVIDERS).map(([k, p]) => `<option value="${k}">${esc(t(p.label))}</option>`).join('')}</select></div>
     <div><label for="base" id="base-l"></label><input id="base"></div>
     <div><label for="key" id="key-l"></label><input id="key" type="password" autocomplete="off"></div>
-    <div data-hide="azure"><label for="model">${t('Modèle')}</label><input id="model" list="models"><datalist id="models"></datalist></div>
+    <div data-hide="azure"><label for="model">${t('Modèle')}</label><input id="model" list="models" autocomplete="off"><datalist id="models"></datalist><small id="mst" class="mst"></small></div>
     <div data-show="azure"><label for="dep">${t('Déploiement')}</label><input id="dep"></div>
     <div data-show="azure"><label for="apiv">${t('Version d’API')}</label><input id="apiv"></div>
     <div><label for="temp">${t('Température')}</label><input id="temp" type="number" step="0.1" min="0" max="2"></div>
@@ -56,22 +56,38 @@ export function render(root) {
     $(root, '#rem').checked = isRemembered(s.provider);
   };
   const fill = () => { for (const [id, k] of Object.entries(f)) $(root, '#' + id).value = s[k]; $(root, '#stages').value = s.stages.join('\n'); $(root, '#prov').value = s.provider; applyProvider(); };
+  const mst = $(root, '#mst'), mb = $(root, '#models-btn');
+  const modelStatus = (kind, text) => { mst.className = 'mst ' + kind; mst.textContent = text; };
+  const setModels = list => { $(root, '#models').innerHTML = list.map(m => `<option value="${esc(m)}">`).join(''); };
+  const defaults = () => {
+    setModels(PROVIDERS[s.provider].models);
+    if (!isAuthorized()) modelStatus('', t('Liste non chargée : cocher l’autorisation d’usage de l’IA ci-dessus.'));
+    else modelStatus('', t('{n} modèles suggérés (liste par défaut du fournisseur).', { n: PROVIDERS[s.provider].models.length }));
+  };
+  let loaded = '', busy = false; // fournisseur + URL dont la liste est chargée
   const loadModels = async () => {
+    if (busy) return; busy = true;
+    modelStatus('busy', t('Chargement des modèles…')); mb.disabled = true;
     try {
       const r = await llm.getAvailableModels();
-      $(root, '#models').innerHTML = r.models.map(m => `<option value="${esc(m)}">`).join('');
-      st.textContent = r.fallback ? t('Liste de secours (chargement impossible : {r})', { r: r.reason }) : t('{n} modèles chargés (voir le champ Modèle).', { n: r.models.length });
-    } catch (e) { st.textContent = e.message; }
-    showStatus();
+      setModels(r.models);
+      if (r.fallback) { modelStatus('warn', t('Liste de secours ({n}) : chargement impossible, détail ci-dessous.', { n: r.models.length })); st.textContent = r.reason; }
+      else { modelStatus('ok', t('{n} modèles disponibles', { n: r.models.length })); loaded = s.provider + s.base; }
+    } catch (e) { modelStatus('error', t('Échec du chargement, détail ci-dessous.')); st.textContent = e.message; }
+    busy = false; mb.disabled = false; showStatus();
   };
-  fill(); showStatus(); st.textContent = llm.status.text;
+  fill(); showStatus(); st.textContent = llm.status.text; defaults();
+  if (isAuthorized()) loadModels();
+  // Le datalist filtre sur la valeur saisie : on vide le champ au focus pour montrer toute la liste, et on restaure si rien n'est choisi.
+  const model = $(root, '#model');
+  model.onfocus = () => { model.placeholder = model.value; model.value = ''; if (isAuthorized() && loaded !== s.provider + s.base) loadModels(); };
+  model.onblur = () => { if (!model.value) model.value = model.placeholder; model.placeholder = ''; };
   $(root, '#auth').checked = isAuthorized();
-  $(root, '#auth').onchange = e => { setAuthorized(e.target.checked); if (e.target.checked) loadModels(); };
+  $(root, '#auth').onchange = e => { setAuthorized(e.target.checked); if (e.target.checked) loadModels(); else defaults(); };
   for (const [id, k] of Object.entries(f)) $(root, '#' + id).onchange = e => { s[k] = e.target.value; save(); };
   $(root, '#prov').onchange = e => {
     const { base, model } = PROVIDERS[e.target.value];
-    Object.assign(s, { provider: e.target.value, base, model }); save(); fill();
-    $(root, '#models').innerHTML = PROVIDERS[s.provider].models.map(m => `<option value="${esc(m)}">`).join('');
+    Object.assign(s, { provider: e.target.value, base, model }); save(); fill(); defaults();
     if (isAuthorized()) loadModels();
   };
   $(root, '#key').onchange = e => {

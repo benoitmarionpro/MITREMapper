@@ -43,6 +43,11 @@ input,select,textarea,button{font:inherit;color:inherit}
 input,select,textarea{width:100%;min-height:38px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--surface);padding:.4rem .75rem}
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:var(--focus)}
 input[type=checkbox]{min-height:0}
+input[list]{padding-right:2rem;background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%236b7280' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right .7rem center/11px;cursor:pointer}
+input[list]::-webkit-calendar-picker-indicator{display:none!important}
+.mst{display:block;margin-top:.25rem;font-size:12px;color:var(--mut)}.mst.ok{color:var(--green-700)}.mst.warn{color:#8A4800}.mst.error{color:var(--red)}.mst.busy{color:var(--indigo-800)}
+.mst.busy::before{content:'';display:inline-block;width:9px;height:9px;margin-right:.35rem;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-1px}
+@keyframes spin{to{transform:rotate(360deg)}}
 textarea{min-height:8rem;font:12px/1.5 ui-monospace,Consolas,monospace}
 button{padding:7px 16px;border-radius:999px;border:1px solid var(--line-strong);background:var(--surface);color:var(--indigo-800);font-size:13px;font-weight:500;cursor:pointer;transition:background .15s,border-color .15s}
 button:hover{border-color:var(--acc);color:var(--acc);background:var(--ink-50)}
@@ -302,7 +307,10 @@ const EN = {
   'Étapes (une par ligne)': 'Stages (one per line)', 'Non testé': 'Not tested', 'En cours…': 'In progress…', 'Liste de secours': 'Fallback list', 'Erreur': 'Error',
   'Endpoint HTTPS Azure (https://<ressource>.openai.azure.com)': 'Azure HTTPS endpoint (https://<resource>.openai.azure.com)', 'URL de base': 'Base URL',
   'Clé API (requise)': 'API key (required)', 'Clé API (optionnelle)': 'API key (optional)', 'Clé enregistrée {mask}': 'Saved key {mask}',
-  'Liste de secours (chargement impossible : {r})': 'Fallback list (loading failed: {r})', '{n} modèles chargés (voir le champ Modèle).': '{n} models loaded (see the Model field).',
+  'Liste non chargée : cocher l’autorisation d’usage de l’IA ci-dessus.': 'List not loaded: tick the AI use authorization above.',
+  '{n} modèles suggérés (liste par défaut du fournisseur).': '{n} suggested models (provider default list).',
+  'Liste de secours ({n}) : chargement impossible, détail ci-dessous.': 'Fallback list ({n}): loading failed, details below.', '{n} modèles disponibles': '{n} models available',
+  'Échec du chargement, détail ci-dessous.': 'Loading failed, details below.',
   'Effacer toutes les clés API de ce navigateur (session et mémorisées) ?': 'Clear all API keys from this browser (session and remembered)?', 'Clés API effacées.': 'API keys cleared.',
   'Connexion OK : {r}': 'Connection OK: {r}', 'Projet sans nom': 'Untitled project', 'Nom du nouveau projet': 'New project name',
   'Supprimer définitivement le projet « {name} » de ce navigateur ?': 'Permanently delete project “{name}” from this browser?',
@@ -603,7 +611,7 @@ function render(root) {
     <div><label for="prov">${t('Fournisseur')}</label><select id="prov">${Object.entries(PROVIDERS).map(([k, p]) => `<option value="${k}">${esc(t(p.label))}</option>`).join('')}</select></div>
     <div><label for="base" id="base-l"></label><input id="base"></div>
     <div><label for="key" id="key-l"></label><input id="key" type="password" autocomplete="off"></div>
-    <div data-hide="azure"><label for="model">${t('Modèle')}</label><input id="model" list="models"><datalist id="models"></datalist></div>
+    <div data-hide="azure"><label for="model">${t('Modèle')}</label><input id="model" list="models" autocomplete="off"><datalist id="models"></datalist><small id="mst" class="mst"></small></div>
     <div data-show="azure"><label for="dep">${t('Déploiement')}</label><input id="dep"></div>
     <div data-show="azure"><label for="apiv">${t('Version d’API')}</label><input id="apiv"></div>
     <div><label for="temp">${t('Température')}</label><input id="temp" type="number" step="0.1" min="0" max="2"></div>
@@ -635,22 +643,38 @@ function render(root) {
     $(root, '#rem').checked = isRemembered(s.provider);
   };
   const fill = () => { for (const [id, k] of Object.entries(f)) $(root, '#' + id).value = s[k]; $(root, '#stages').value = s.stages.join('\n'); $(root, '#prov').value = s.provider; applyProvider(); };
+  const mst = $(root, '#mst'), mb = $(root, '#models-btn');
+  const modelStatus = (kind, text) => { mst.className = 'mst ' + kind; mst.textContent = text; };
+  const setModels = list => { $(root, '#models').innerHTML = list.map(m => `<option value="${esc(m)}">`).join(''); };
+  const defaults = () => {
+    setModels(PROVIDERS[s.provider].models);
+    if (!isAuthorized()) modelStatus('', t('Liste non chargée : cocher l’autorisation d’usage de l’IA ci-dessus.'));
+    else modelStatus('', t('{n} modèles suggérés (liste par défaut du fournisseur).', { n: PROVIDERS[s.provider].models.length }));
+  };
+  let loaded = '', busy = false; // fournisseur + URL dont la liste est chargée
   const loadModels = async () => {
+    if (busy) return; busy = true;
+    modelStatus('busy', t('Chargement des modèles…')); mb.disabled = true;
     try {
       const r = await llm.getAvailableModels();
-      $(root, '#models').innerHTML = r.models.map(m => `<option value="${esc(m)}">`).join('');
-      st.textContent = r.fallback ? t('Liste de secours (chargement impossible : {r})', { r: r.reason }) : t('{n} modèles chargés (voir le champ Modèle).', { n: r.models.length });
-    } catch (e) { st.textContent = e.message; }
-    showStatus();
+      setModels(r.models);
+      if (r.fallback) { modelStatus('warn', t('Liste de secours ({n}) : chargement impossible, détail ci-dessous.', { n: r.models.length })); st.textContent = r.reason; }
+      else { modelStatus('ok', t('{n} modèles disponibles', { n: r.models.length })); loaded = s.provider + s.base; }
+    } catch (e) { modelStatus('error', t('Échec du chargement, détail ci-dessous.')); st.textContent = e.message; }
+    busy = false; mb.disabled = false; showStatus();
   };
-  fill(); showStatus(); st.textContent = llm.status.text;
+  fill(); showStatus(); st.textContent = llm.status.text; defaults();
+  if (isAuthorized()) loadModels();
+  // Le datalist filtre sur la valeur saisie : on vide le champ au focus pour montrer toute la liste, et on restaure si rien n'est choisi.
+  const model = $(root, '#model');
+  model.onfocus = () => { model.placeholder = model.value; model.value = ''; if (isAuthorized() && loaded !== s.provider + s.base) loadModels(); };
+  model.onblur = () => { if (!model.value) model.value = model.placeholder; model.placeholder = ''; };
   $(root, '#auth').checked = isAuthorized();
-  $(root, '#auth').onchange = e => { setAuthorized(e.target.checked); if (e.target.checked) loadModels(); };
+  $(root, '#auth').onchange = e => { setAuthorized(e.target.checked); if (e.target.checked) loadModels(); else defaults(); };
   for (const [id, k] of Object.entries(f)) $(root, '#' + id).onchange = e => { s[k] = e.target.value; save(); };
   $(root, '#prov').onchange = e => {
     const { base, model } = PROVIDERS[e.target.value];
-    Object.assign(s, { provider: e.target.value, base, model }); save(); fill();
-    $(root, '#models').innerHTML = PROVIDERS[s.provider].models.map(m => `<option value="${esc(m)}">`).join('');
+    Object.assign(s, { provider: e.target.value, base, model }); save(); fill(); defaults();
     if (isAuthorized()) loadModels();
   };
   $(root, '#key').onchange = e => {

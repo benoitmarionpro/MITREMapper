@@ -36,6 +36,11 @@ input,select,textarea,button{font:inherit;color:inherit}
 input,select,textarea{width:100%;min-height:38px;border:1px solid var(--line-strong);border-radius:var(--radius);background:var(--surface);padding:.4rem .75rem}
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:var(--focus)}
 input[type=checkbox]{min-height:0}
+input[list]{padding-right:2rem;background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%236b7280' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right .7rem center/11px;cursor:pointer}
+input[list]::-webkit-calendar-picker-indicator{display:none!important}
+.mst{display:block;margin-top:.25rem;font-size:12px;color:var(--mut)}.mst.ok{color:var(--green-700)}.mst.warn{color:#8A4800}.mst.error{color:var(--red)}.mst.busy{color:var(--indigo-800)}
+.mst.busy::before{content:'';display:inline-block;width:9px;height:9px;margin-right:.35rem;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-1px}
+@keyframes spin{to{transform:rotate(360deg)}}
 textarea{min-height:8rem;font:12px/1.5 ui-monospace,Consolas,monospace}
 button{padding:7px 16px;border-radius:999px;border:1px solid var(--line-strong);background:var(--surface);color:var(--indigo-800);font-size:13px;font-weight:500;cursor:pointer;transition:background .15s,border-color .15s}
 button:hover{border-color:var(--acc);color:var(--acc);background:var(--ink-50)}
