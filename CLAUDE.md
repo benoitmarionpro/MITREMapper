@@ -30,7 +30,7 @@ Le LLM fait le gros du travail ; l'utilisateur relit et corrige. Les IDs ATT&CK 
 | `js/settings.js` | Configuration LLM, étapes de stratégie, import/export projet |
 | `js/i18n.js` | `t()`, `lang`, `locale`, `setLang`, dictionnaire `EN` |
 | `js/ui.js` | Helpers (`esc`, `run` avec annulation, lecture de fichiers) |
-| `data/attack.json` | Référentiel ATT&CK Enterprise compact, **généré** : `techniques[{id,name,tactics,dc[]}]` (`dc` = index dans `components[{id:'DC0032',name}]`, composants de données des stratégies de détection MITRE ; lire via `sourcesOf()`), `moved{ancienId: idActuel}` (IDs révoqués) |
+| `data/attack.json` | Référentiel ATT&CK Enterprise compact, **généré** : `techniques[{id,name,tactics,dc[]}]` (`dc` = index dans `components[{id:'DC0032',name}]`, composants de données des stratégies de détection MITRE ; lire via `sourcesOf()`), `moved{ancienId: idActuel}` (IDs révoqués), `groups[{id:'G0102',name,aka[],t[index de technique]}]` (lire via `group()`, `groupTechs()`, `validateGroups()`) |
 | `tools/build-attack.mjs` | Régénère `data/attack.json` depuis le STIX officiel (`node tools/build-attack.mjs [version] [stix-local]`, version figée à 20.1 par défaut : monter de version est une décision explicite) |
 | `tools/build-standalone.mjs` | Génère `dist/mitremapper.html`, fichier unique sans serveur (mini-bundler : un module = une fonction ; ne pas utiliser de `export` hors `export const/let/function/class NOM` en début de ligne ni de live binding, ex. `attack` est un objet partagé) |
 | `data/sample/` | CTI, règles Sigma et `project.json` (démo complète déjà mappée, chargée par `loadDemo()` dans `store.js`) |
@@ -39,7 +39,7 @@ Le LLM fait le gros du travail ; l'utilisateur relit et corrige. Les IDs ATT&CK 
 | `fonts/` | Inter et Poppins (woff2, SIL OFL 1.1), inlinées en data URI dans `dist/` |
 
 ## Modèle de données
-`{pid, name, nextRef, client, cti, snapshots[{id,date,label,pct,nTech,tot,st{techId:cov|part|gap},scen[{ref,name,pct}]}], scenarios[{id,ref,name,priority,techniques[],summary,actors}], rules[{id,name,source,body,techniques[],scenarios[ids],why{scenarioId:phrase},reviewed,tags[],by:'tags'|'ia',tagDiff{tags[],ia[]}|null,stage,confidence,note,mapped}], settings}`
+`{pid, name, nextRef, client, cti, snapshots[{id,date,label,pct,nTech,tot,st{techId:cov|part|gap},scen[{ref,name,pct}]}], scenarios[{id,ref,name,priority,techniques[],summary,actors,groups[G…],evidence}], rules[{id,name,source,body,techniques[],scenarios[ids],why{scenarioId:phrase},reviewed,tags[],by:'tags'|'ia',tagDiff{tags[],ia[]}|null,stage,confidence,note,mapped}], settings}`
 
 Projets (`store.js`) : projet courant + réglages dans `mitremapper.v1` ; bibliothèque dans `mitremapper.lib` (index) et `mitremapper.lib.<pid>` (données sans réglages), synchronisée à chaque `save()`. `state` est un objet unique jamais réassigné (`loadInto` le vide puis le remplit). Références de scénarios stables : `s.ref` attribué par `save()` (`nextRef`, jamais réutilisé ; renumérotation depuis S1 si aucun scénario n'a de ref) ; toujours afficher via `sref(s)`, jamais par l'index.
 
@@ -61,6 +61,8 @@ Règle de couverture (`coverage.js`, `status(coverageMap(), id)`) : *couverte* s
 - Tout projet importé passe par `sanitize()` (`store.js`) : champs connus seulement, typés et bornés, identifiants régénérés (ils sont insérés dans le HTML), techniques validées. Ajouter un champ au modèle = l'ajouter aussi dans `sanitize()`, sinon il est perdu à l'import.
 - Exports CSV : préfixer `'` les cellules commençant par `= + - @` (injection de formule).
 - Le référentiel ATT&CK évolue (v19 a scindé Defense Evasion en Stealth + Defense Impairment) : ne pas coder en dur la liste des tactiques, elle vient de `attack.json`. Les IDs révoqués (`attack.moved`) sont convertis par `validate()` / `current()`, et les projets enregistrés par `upgradeIds()` (au démarrage et dans `loadInto`). Le prompt reçoit le catalogue complet, sous-techniques comprises (`promptCatalog()`).
+- Citations CTI des scénarios (`evidence`) : vérifiées par `citeOk()` (`scenarios.js`) contre `state.cti`, jamais considérées comme fiables sans ce contrôle.
+- Ébauches Sigma (`coverage.js`, `draft()`) : toujours ajoutées en `confidence: 'low'`, `reviewed: false`, pour ne jamais compter comme couverture avant validation humaine.
 - Démo et exemples bilingues : `sample(f)` charge `cti.en.txt` / `project.en.json` en anglais ; toute modification de `project.json` doit être reportée dans `project.en.json` (mêmes IDs et liens).
 - Vérifier après modification : `node --check js/*.js`, ouvrir `test.html`, tester sur l'exemple de `data/sample/`, régénérer `dist/mitremapper.html` et l'ouvrir en `file://`.
 

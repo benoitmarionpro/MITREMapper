@@ -53,6 +53,9 @@ La liste des modèles se charge automatiquement quand c'est possible ; sinon une
 
 Renseigner le profil client (secteur, taille, zones, actifs clés), coller ou charger des rapports CTI, cliquer **Générer les scénarios**. Chaque scénario a un nom, une priorité et des techniques ATT&CK, tous éditables. Les IDs inconnus de MITRE sont rejetés et signalés.
 
+- **Groupes ATT&CK** : l'IA rattache le scénario aux groupes (intrusion sets MITRE) nommés dans la CTI ou dont le mode opératoire correspond ; on peut aussi les saisir par ID, nom ou alias (`G0102`, `Wizard Spider`, `FIN12`). Le scénario propose alors les techniques connues de ces groupes qu'il ne contient pas encore, à ajouter d'un clic.
+- **Citation CTI** : la phrase des sources qui justifie le scénario, copiée mot pour mot par l'IA. L'outil vérifie qu'elle figure bien dans la CTI (✓ retrouvée / ⚠ introuvable, à vérifier) : une justification inventée ou reformulée est signalée.
+
 ## 3. Règles
 
 Coller ou charger des règles (Sigma, KQL, SPL, texte de documentation…). Séparer plusieurs règles par une ligne `---`. Un fichier `.json` contenant un tableau donne une règle par élément. Cliquer **Mapper les règles non traitées** : pour chaque règle, techniques, scénarios liés (avec une phrase de justification), étape et confiance (high / medium / low) sont proposés par lots.
@@ -76,6 +79,7 @@ La **revue du mapping** est une matrice règles × scénarios (S1…Sn, nom au s
 - **Couverture par scénario** : pourcentage de techniques couvertes, partielles et en écart.
 - **Évolution** : **Figer un instantané** (par exemple avant un atelier) enregistre l'état de la couverture dans le projet ; la page compare ensuite l'état courant au dernier instantané (ou à celui choisi) : couverture avant → après, techniques améliorées ou dégradées, progression par scénario. La comparaison est reprise dans le rapport et le classeur.
 - **Écarts priorisés** par priorité de scénario, avec les sources de données ATT&CK qui permettraient de les détecter.
+- **Ébaucher une règle** (IA) : depuis la liste des écarts ou le volet d'une technique, l'IA rédige une règle Sigma (logique, journaux requis, faux positifs, tests). Ajoutée aux règles, elle reste en confiance basse et non validée : la technique passe en « partiel », pas en « couvert », tant que l'analyste ne l'a pas relue, testée et validée.
 - **Sources de données à prioriser** : composants de données ATT&CK (Process Creation, Command Execution…, issus des stratégies de détection MITRE) classés par nombre d'écarts qu'ils aident à couvrir et priorité des scénarios. À confronter aux journaux réellement collectés chez le client.
 - **Livrables** :
   - **Rapport client (PDF)** : ouvre un rapport aux couleurs Wavestone dans un nouvel onglet, à imprimer en PDF (bouton « Imprimer / PDF ») ; **Rapport (HTML)** le télécharge. Contenu : synthèse chiffrée, évolution depuis l'instantané comparé (s'il y en a un), couverture par scénario, écarts prioritaires avec recommandation, sources de données à prioriser, matrice ATT&CK (page paysage), inventaire des règles, méthode et limites.

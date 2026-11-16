@@ -1,6 +1,6 @@
 import { setKey } from './keys.js';
 import { t, lang } from './i18n.js';
-import { validate, current } from './attack.js';
+import { validate, current, validateGroups } from './attack.js';
 const KEY = 'mitremapper.v1';                         // projet courant + réglages
 const LIB = 'mitremapper.lib', LIBP = 'mitremapper.lib.'; // index des projets + données de chaque projet (sans réglages)
 export const DEFAULT_STAGES = lang === 'en' ? ['Prevention', 'Detection', 'Investigation', 'Response'] : ['Prévention', 'Détection', 'Investigation', 'Réponse'];
@@ -101,7 +101,7 @@ export function sanitize(d) {
   const ids = new Map();
   const scenarios = d.scenarios.filter(s => s && typeof s === 'object').map(s => {
     const id = uid(); ids.set(s.id, id);
-    return { id, ref: Number.isInteger(s.ref) && s.ref > 0 ? s.ref : undefined, name: str(s.name, 300), priority: one(s.priority, ['high', 'medium', 'low'], 'medium'), techniques: techs(s.techniques), summary: str(s.summary), actors: str(s.actors, 1000), rationale: str(s.rationale), rejected: strs(s.rejected) };
+    return { id, ref: Number.isInteger(s.ref) && s.ref > 0 ? s.ref : undefined, name: str(s.name, 300), priority: one(s.priority, ['high', 'medium', 'low'], 'medium'), techniques: techs(s.techniques), summary: str(s.summary), actors: str(s.actors, 1000), rationale: str(s.rationale), rejected: strs(s.rejected), groups: validateGroups(s.groups).ok, evidence: str(s.evidence, 600) };
   });
   const rules = d.rules.filter(r => r && typeof r === 'object').map(r => {
     const why = {};

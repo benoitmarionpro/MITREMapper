@@ -119,3 +119,5 @@ label.chk input{width:auto;min-height:0;margin-top:.2rem}
 .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.8rem}.step{margin:0;display:flex;flex-direction:column}.step button{margin-top:auto;align-self:flex-start}
 .step .sh{display:flex;align-items:center;gap:.6rem}.step h3{margin:0;flex:1;font-size:15px}.step .num{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--ink-100);color:var(--indigo-800);font-weight:700}
 .step.done .num{background:var(--green-50);color:var(--green-700)}.step.next{border-color:var(--acc);box-shadow:0 0 0 2px rgba(90,43,224,.15),var(--shadow)}.step.next .num{background:var(--acc);color:#fff}.step.wait{opacity:.75}
+.sugg{margin:.4rem 0}.sugg summary{cursor:pointer;color:var(--acc);font-size:13px;font-weight:600}.sugg button.tag{padding:1px 8px;border-radius:4px;font-size:12px;margin:2px}.sugg .tag small{color:var(--mut)}
+a.tag{text-decoration:none;margin:2px 2px 0 0;display:inline-block}a.tag:hover{text-decoration:underline}

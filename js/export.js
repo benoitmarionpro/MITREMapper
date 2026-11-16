@@ -1,7 +1,7 @@
 // Livrables client : rapport HTML imprimable (PDF), classeur Excel (.xlsx), couches ATT&CK Navigator.
 // Sans dépendance : le .xlsx et le .zip sont écrits ici (zip non compressé). A = analysis() de coverage.js.
 import { state, sref } from './store.js';
-import { attack, tech, sourcesOf } from './attack.js';
+import { attack, tech, sourcesOf, group } from './attack.js';
 import { esc } from './ui.js';
 import { t, lang, locale } from './i18n.js';
 
@@ -13,6 +13,7 @@ const scName = id => state.scenarios.find(s => s.id === id);
 const yesNo = b => b ? t('oui') : t('non');
 const sgn = n => (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(n);
 const dcNames = id => sourcesOf(id).map(c => c.name).join(', ');
+const groupNames = s => (s.groups || []).map(id => `${id} ${group(id)?.name || ''}`.trim()).join(', ');
 const origin = r => r.by === 'tags' ? 'tags' : r.by === 'ia' ? t('IA') : '';
 
 /** Recommandation déterministe pour une technique de scénario non couverte. */
@@ -89,9 +90,9 @@ export function workbook(A) {
       [t('Secteur'), c.sector], [t('Taille'), c.size], [t('Pays / zones'), c.country], [t('Actifs clés'), c.assets],
       [t('Scénarios'), state.scenarios.length], [t('Règles'), state.rules.length], [t('Règles validées'), state.rules.filter(r => r.reviewed).length],
       [t('Techniques de scénario'), A.nTech], [t('Couvertes'), A.tot.cov], [t('Partielles'), A.tot.part], [t('Écarts'), A.tot.gap], [t('Couverture globale (%)'), A.pct]], [28, 60]],
-    [t('Scénarios')]: [[[t('Réf'), t('Scénario'), t('Priorité'), t('Acteurs'), t('Résumé'), t('Techniques'), t('Couvertes'), t('Partielles'), t('Écarts'), t('Couverture (%)'), t('Règles liées')],
+    [t('Scénarios')]: [[[t('Réf'), t('Scénario'), t('Priorité'), t('Acteurs'), t('Résumé'), t('Techniques'), t('Couvertes'), t('Partielles'), t('Écarts'), t('Couverture (%)'), t('Règles liées'), t('Groupes ATT&CK'), t('Citation CTI')],
       ...A.scen.map(({ s, c: n, pct }) => [sref(s), s.name, prio(s.priority), s.actors || '', s.summary || '', s.techniques.join(' '), n.cov, n.part, n.gap, pct,
-        state.rules.filter(r => r.scenarios.includes(s.id)).length])], [6, 45, 10, 25, 60, 40, 11, 11, 8, 14, 12]],
+        state.rules.filter(r => r.scenarios.includes(s.id)).length, groupNames(s), s.evidence || ''])], [6, 45, 10, 25, 60, 40, 11, 11, 8, 14, 12, 30, 60]],
     [t('Écarts')]: [[[t('Technique'), t('Nom'), t('Statut'), t('Priorité'), t('Scénarios'), t('Recommandation'), t('Sources de données (ATT&CK)')],
       ...A.gaps.map(g => [g.id, g.name, LBL[g.k], prio(['high', 'medium', 'low'][g.p]), g.scs.map(sref).join(' '), reco(A, g), dcNames(g.id)])], [12, 40, 10, 10, 22, 80, 60]],
     [t('Sources de données')]: [[[t('Composant'), t('Nom'), t('Écarts'), t('Priorité max.'), t('Techniques concernées')],
@@ -168,7 +169,7 @@ ${A.diff ? (D => `<h2>${t('Évolution depuis « {label} » ({date})', { label: e
 ${D.better.length || D.worse.length ? `<table><thead><tr><th>${t('Technique')}</th><th>${t('Avant')}</th><th>${t('Maintenant')}</th></tr></thead><tbody>${[...D.better, ...D.worse].map(x => `<tr><td><b>${x.id}</b> ${esc(name(x.id))}</td><td class="st ${x.from}">${LBL[x.from]}</td><td class="st ${x.to}">${LBL[x.to]}</td></tr>`).join('')}</tbody></table>` : ''}`)(A.diff) : ''}
 <h2>${t('Couverture par scénario')}</h2>
 <table><thead><tr><th>${t('Réf')}</th><th>${t('Scénario')}</th><th>${t('Priorité')}</th><th>${t('Couverture')}</th><th></th><th>${t('Détail')}</th></tr></thead><tbody>
-${A.scen.map(({ s, c: n, pct }) => `<tr><td><span class="ref">${sref(s)}</span></td><td><b>${esc(s.name)}</b>${s.actors ? `<div class="mut">${esc(s.actors)}</div>` : ''}</td><td>${prio(s.priority)}</td><td>${bar(n)}</td><td><b>${pct} %</b></td><td class="mut">${t('{c} couvertes, {p} partielles, {g} écarts', { c: n.cov, p: n.part, g: n.gap })}</td></tr>`).join('')}
+${A.scen.map(({ s, c: n, pct }) => `<tr><td><span class="ref">${sref(s)}</span></td><td><b>${esc(s.name)}</b>${s.actors || s.groups?.length ? `<div class="mut">${esc([s.actors, groupNames(s)].filter(Boolean).join(' · '))}</div>` : ''}${s.evidence ? `<div class="mut"><i>${t('« {x} »', { x: esc(s.evidence) })}</i></div>` : ''}</td><td>${prio(s.priority)}</td><td>${bar(n)}</td><td><b>${pct} %</b></td><td class="mut">${t('{c} couvertes, {p} partielles, {g} écarts', { c: n.cov, p: n.part, g: n.gap })}</td></tr>`).join('')}
 </tbody></table>
 
 <h2>${t('Écarts prioritaires et recommandations')}</h2>

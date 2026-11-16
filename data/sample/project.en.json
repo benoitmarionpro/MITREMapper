@@ -27,7 +27,9 @@
    "priority": "high",
    "rationale": "Vector explicitly observed against European hospitals. Critical impact on the availability of patient records and care activities.",
    "id": "vkkwclf",
-   "rejected": []
+   "rejected": [],
+   "evidence": "Initial access is gained through spearphishing with attachments (macros, ISO/LNK)",
+   "groups": []
   },
   {
    "name": "Exploitation of an exposed VPN or firewall leading to ransomware",
@@ -49,7 +51,9 @@
    "priority": "high",
    "rationale": "Exposed appliances are cited as a frequent vector. Hospitals often have many critical remote access points.",
    "id": "lijlu94",
-   "rejected": []
+   "rejected": [],
+   "evidence": "or by exploiting unpatched exposed VPNs/firewalls",
+   "groups": []
   },
   {
    "name": "Use of valid accounts bought from Initial Access Brokers",
@@ -70,7 +74,9 @@
    "priority": "high",
    "rationale": "The report explicitly mentions purchased accounts. Privileged identities quickly give access to hospital information systems.",
    "id": "2xe2f60",
-   "rejected": []
+   "rejected": [],
+   "evidence": "Attackers use valid accounts bought from initial access brokers.",
+   "groups": []
   },
   {
    "name": "Double extortion with exfiltration to cloud storage",
@@ -90,7 +96,9 @@
    "priority": "high",
    "rationale": "Patient records are a high-value target and carry a high regulatory risk in a hospital context.",
    "id": "fkcufn8",
-   "rejected": []
+   "rejected": [],
+   "evidence": "exfiltration to cloud storage (Rclone/MEGA) before encrypting ESXi servers",
+   "groups": []
   },
   {
    "name": "Encryption of ESXi hypervisors",
@@ -109,7 +117,9 @@
    "priority": "high",
    "rationale": "ESXi assets are explicitly mentioned in the client profile and in the threat report. Maximum operational impact.",
    "id": "510znye",
-   "rejected": []
+   "rejected": [],
+   "evidence": "before encrypting ESXi servers and file shares",
+   "groups": []
   },
   {
    "name": "Exposed Exchange compromise with a web shell",
@@ -129,7 +139,9 @@
    "priority": "medium",
    "rationale": "The report specifically mentions this modus operandi in espionage campaigns targeting medical research.",
    "id": "xkw0c4h",
-   "rejected": []
+   "rejected": [],
+   "evidence": "web shells on exposed Exchange servers",
+   "groups": []
   },
   {
    "name": "Medical research espionage through the software supply chain",
@@ -150,7 +162,9 @@
    "priority": "medium",
    "rationale": "Less likely than ransomware but relevant for organisations involved in research or clinical trials.",
    "id": "nm9bew3",
-   "rejected": []
+   "rejected": [],
+   "evidence": "state-sponsored espionage campaigns target medical research: software supply chain compromise",
+   "groups": []
   },
   {
    "name": "Stealthy persistence through scheduled tasks and slow HTTPS exfiltration",
@@ -169,7 +183,9 @@
    "priority": "medium",
    "rationale": "TTP explicitly described. High confidentiality risk but more limited operational impact than ransomware.",
    "id": "2d69mj8",
-   "rejected": []
+   "rejected": [],
+   "evidence": "persistence through scheduled tasks and slow exfiltration over HTTPS",
+   "groups": []
   },
   {
    "name": "Lateral movement with PsExec and SMB from a compromised workstation",
@@ -189,7 +205,9 @@
    "priority": "medium",
    "rationale": "Very common in ransomware intrusions and highly dependent on internal segmentation.",
    "id": "g4seqvc",
-   "rejected": []
+   "rejected": [],
+   "evidence": "lateral movement via RDP and PsExec/SMB",
+   "groups": []
   },
   {
    "name": "AD credential theft through LSASS and Kerberoasting",
@@ -208,7 +226,9 @@
    "priority": "medium",
    "rationale": "Recurring step in the described campaigns. Useful detection to break the attack chain before the final impact.",
    "id": "r7235f5",
-   "rejected": []
+   "rejected": [],
+   "evidence": "LSASS dumping (Mimikatz), Kerberoasting",
+   "groups": []
   },
   {
    "name": "Disabling security tools before impact",
@@ -227,7 +247,9 @@
    "priority": "low",
    "rationale": "Activity usually observed at an advanced stage. High detection value but less discriminating as a standalone scenario.",
    "id": "9c72kba",
-   "rejected": []
+   "rejected": [],
+   "evidence": "EDR tampering and shadow copy deletion (vssadmin)",
+   "groups": []
   }
  ],
  "rules": [

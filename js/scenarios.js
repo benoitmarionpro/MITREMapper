@@ -1,14 +1,25 @@
 import { state, save, uid, sample, sref, sanitize } from './store.js';
 import { chatJson, fence, UNTRUSTED } from './llm.js';
-import { validate, promptCatalog } from './attack.js';
+import { validate, promptCatalog, group, groupTechs, groupCatalog, validateGroups, tech, parentOf } from './attack.js';
 import { esc, $, readFiles, run, gateAI, undoable } from './ui.js';
 import { t, lang, locale } from './i18n.js';
+/** La citation (evidence) figure-t-elle dans la CTI ? Comparaison tolérante (casse, espaces, apostrophes) ; « … » sépare plusieurs extraits. */
+export function citeOk(evidence, cti) {
+  const norm = x => String(x || '').toLowerCase().replace(/[’‘`´]/g, "'").replace(/[«»“”]/g, '"').replace(/\s+/g, ' ').trim();
+  const parts = norm(evidence).replace(/^"|"$/g, '').split(/\.\.\.|…/).map(x => x.trim().replace(/^"|"$/g, '').trim()).filter(x => x.length >= 12);
+  const c = norm(cti);
+  return parts.length > 0 && parts.every(x => c.includes(x));
+}
 const MAX_CTI = 60000; // ponytail: troncature simple, découpage en plusieurs appels si les sources dépassent souvent
 
 const SYSTEM = () => `Tu es un analyste CTI senior. À partir du profil client et des extraits de rapports de menace, tu déduis les scénarios de menace les plus pertinents à couvrir en détection.
-Réponds en JSON : {"scenarios":[{"name":"","actors":"","summary":"","techniques":["T1566.001"],"priority":"high|medium|low","rationale":""}]}
+Réponds en JSON : {"scenarios":[{"name":"","actors":"","summary":"","techniques":["T1566.001"],"priority":"high|medium|low","rationale":"","groups":["G0102"],"evidence":""}]}
 Règles : ${lang === 'en' ? 'rédige tous les textes (name, actors, summary, rationale) EN ANGLAIS' : 'rédige tout en français'} ; 5 à 15 scénarios, concrets et distincts ; techniques = IDs ATT&CK Enterprise existants (techniques ou sous-techniques), 4 à 12 par scénario, ordonnées selon la kill chain ; priority selon la probabilité et l'impact pour CE client ; répartis les priorités (au plus la moitié en high) ; préfère les sous-techniques précises quand la source les justifie.
+groups = IDs des groupes ATT&CK de la liste ci-dessous nommés dans les sources (nom ou alias) ou dont le mode opératoire décrit correspond clairement ; [] sinon, n'invente pas.
+evidence = la phrase des sources qui justifie le scénario, COPIÉE MOT POUR MOT dans la langue des sources (pas de reformulation ni de traduction, 300 caractères au plus ; « … » pour relier deux extraits).
 ${UNTRUSTED}
+Groupes ATT&CK (intrusion sets) :
+${groupCatalog()}
 `;
 
 export function render(root) {
@@ -44,6 +55,13 @@ export function render(root) {
     state.cti = await sample('cti.txt'); save(); render(root);
   };
   const list = $(root, '#list');
+  /** Techniques connues des groupes du scénario (ATT&CK) qui n'y figurent pas : pistes pour compléter le scénario. */
+  const suggest = s => {
+    const have = new Set(s.techniques.flatMap(x => [x, parentOf(x)]));
+    const ids = [...new Set((s.groups || []).flatMap(id => group(id) ? groupTechs(group(id)) : []))].filter(x => !have.has(x)).sort();
+    return ids.length ? `<details class="sugg"><summary>${t('{n} technique(s) connue(s) de ces groupes absente(s) du scénario', { n: ids.length })}</summary>
+      ${ids.map(x => `<button class="tag" data-addt="${x}" title="${esc(tech(x)?.name)}">+ ${x} <small>${esc(tech(x)?.name)}</small></button>`).join('')}</details>` : '';
+  };
   const draw = () => {
     $(root, '#n').textContent = state.scenarios.length;
     list.innerHTML = state.scenarios.map(s => `<div class="card" data-id="${s.id}"><b class="tag sref">${sref(s)}</b>
@@ -52,6 +70,11 @@ export function render(root) {
       <div><label>${t('Techniques (IDs, séparés par des virgules)')}</label><input data-k="techniques" value="${esc(s.techniques.join(', '))}"></div></div>
       <label>${t('Résumé / justification')}</label><input data-k="summary" value="${esc(s.summary || '')}">
       <div class="mut">${esc(s.actors || '')} ${s.rejected?.length ? `<span class="err">${t('IDs rejetés : {ids}', { ids: esc(s.rejected.join(', ')) })}</span>` : ''}</div>
+      <div class="row"><div><label>${t('Groupes ATT&CK (IDs ou noms)')}</label><input data-k="groups" value="${esc((s.groups || []).join(', '))}" placeholder="G0102, FIN12…">
+        <div>${(s.groups || []).map(id => `<a class="tag" href="https://attack.mitre.org/groups/${id}/" target="_blank" rel="noopener">${id} ${esc(group(id)?.name)}</a>`).join(' ')}${s.badGroups?.length ? ` <span class="err">${t('inconnus : {ids}', { ids: esc(s.badGroups.join(', ')) })}</span>` : ''}</div></div>
+      <div><label>${t('Citation CTI (justification)')}</label><input data-k="evidence" value="${esc(s.evidence || '')}">
+        ${s.evidence ? (citeOk(s.evidence, state.cti) ? `<small class="mst ok">${t('✓ citation retrouvée dans les sources CTI')}</small>` : `<small class="mst warn">${t('⚠ citation introuvable dans les sources CTI : à vérifier')}</small>`) : ''}</div></div>
+      ${suggest(s)}
       <button data-del>${t('Supprimer')}</button></div>`).join('');
   };
   list.onchange = e => {
@@ -59,9 +82,13 @@ export function render(root) {
     if (!k) return;
     const s = state.scenarios.find(x => x.id === e.target.closest('.card').dataset.id);
     if (k === 'techniques') { const v = validate(e.target.value.split(/[,\s]+/).filter(Boolean)); s.techniques = v.ok; s.rejected = v.rejected; save(); draw(); }
+    else if (k === 'groups') { const v = validateGroups(e.target.value.split(',').map(x => x.trim()).filter(Boolean)); s.groups = v.ok; s.badGroups = v.rejected; save(); draw(); }
+    else if (k === 'evidence') { s.evidence = e.target.value; save(); draw(); }
     else { s[k] = e.target.value; save(); }
   };
   list.onclick = e => {
+    const add = e.target.closest('[data-addt]');
+    if (add) { const s = state.scenarios.find(x => x.id === add.closest('.card').dataset.id); s.techniques = [...new Set([...s.techniques, add.dataset.addt])]; save(); draw(); return; }
     if (e.target.dataset.del === undefined) return;
     const s = state.scenarios.find(x => x.id === e.target.closest('.card').dataset.id);
     undoable(t('Scénario {ref} supprimé.', { ref: sref(s) }), () => { state.scenarios = state.scenarios.filter(x => x !== s); save(); draw(); });

@@ -1,8 +1,10 @@
 import { state, save, exportJson, download, loadDemo, sref, uid } from './store.js';
-import { attack, parentOf, tech, sourcesOf } from './attack.js';
+import { attack, parentOf, tech, sourcesOf, validate } from './attack.js';
+import { chatJson, fence, UNTRUSTED } from './llm.js';
+import { extractTechniques } from './mapping.js';
 import { reportHtml, workbook, layer, layersZip } from './export.js';
-import { esc, $, showProject, undoable } from './ui.js';
-import { t, locale } from './i18n.js';
+import { esc, $, showProject, undoable, run, gateAI } from './ui.js';
+import { t, lang, locale } from './i18n.js';
 
 const RANK = { low: 1, medium: 2, high: 3 };
 /** id -> {n, best, exact, rules[], items[]} : une règle sur une sous-technique compte aussi pour la parente ;
@@ -75,6 +77,12 @@ export function compare(A, snap) {
     scen: new Map(A.scen.map(({ s }) => [s.id, snap.scen.find(x => x.ref === s.ref)?.pct])) };
 }
 export const signed = n => (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(n);
+const SIGMA = () => `Tu es un ingénieur detection engineering. Rédige UNE ébauche de règle Sigma qui détecte la technique ATT&CK indiquée, dans le contexte des scénarios fournis.
+Réponds en JSON : {"sigma":"<règle YAML complète>","notes":""}
+- sigma : règle Sigma valide (title, id UUID v4, status: experimental, description, references vers la fiche ATT&CK, author: MITREMapper (ébauche IA), tags dont attack.<tactique> et attack.<id de technique en minuscules>, logsource, detection, falsepositives, level).
+- Logique comportementale robuste plutôt qu'un indicateur fragile ; choisis un logsource cohérent avec les sources de données ATT&CK fournies.
+- notes : ${lang === 'en' ? 'EN ANGLAIS' : 'en français'}, 2 à 4 phrases : journaux requis, hypothèses, faux positifs attendus, comment tester.
+- ${UNTRUSTED}`;
 const SHOW = { all: t('Toutes les techniques'), scenario: t('Techniques des scénarios'), gap: t('Écarts uniquement'), cov: t('Couvertes uniquement') };
 const view = { q: '', sc: '', show: 'all', cmp: '' }; // filtres conservés tant que la page est ouverte ; cmp : '' = dernier instantané, 'none' = sans comparaison
 
@@ -90,7 +98,7 @@ export function render(root) {
       <td>${pct}%${D ? (D.scen.get(s.id) == null ? ` <span class="mut">(${t('nouveau')})</span>` : delta(pct - D.scen.get(s.id), ' pts')) : ''} <span class="mut">(${t('{c} couvertes, {p} partielles, {g} écarts', { c: c.cov, p: c.part, g: c.gap })})</span></td>
       <td>${st.map(([id, k]) => `<span class="tag ${k}" title="${esc(tech(id)?.name)}">${id}</span>`).join('')}</td></tr>`).join('');
   const dcs = id => sourcesOf(id).map(c => esc(c.name)).join(', ') || '<span class="mut">—</span>';
-  const gapRows = A.gaps.map(g => `<tr><td>${g.id} ${esc(g.name)}</td><td class="${g.k}">${LABEL[g.k]}</td><td>${g.scs.map(s => `<div><span class="tag sref">${sref(s)}</span> ${esc(s.name)}</div>`).join('')}</td><td class="mut">${dcs(g.id)}</td></tr>`).join('');
+  const gapRows = A.gaps.map(g => `<tr><td>${g.id} ${esc(g.name)}</td><td class="${g.k}">${LABEL[g.k]}</td><td>${g.scs.map(s => `<div><span class="tag sref">${sref(s)}</span> ${esc(s.name)}</div>`).join('')}</td><td class="mut">${dcs(g.id)}</td><td><button data-draft="${g.id}">${t('Ébaucher une règle')}</button></td></tr>`).join('');
   const srcRows = A.sources.slice(0, 15).map(c => `<tr><td><a href="https://attack.mitre.org/datacomponents/${c.id}/" target="_blank" rel="noopener">${c.id}</a> <b>${esc(c.name)}</b></td><td>${c.ids.length}</td><td>${PRIOL[c.p]}</td><td>${c.ids.map(id => `<span class="tag" title="${esc(tech(id)?.name)}">${id}</span>`).join('')}</td></tr>`).join('');
   const snaps = state.snapshots || [], fmt = d => new Date(d).toLocaleDateString(locale);
   const ids = (list, f) => list.map(x => `<span class="tag ${x.to || ''}" title="${esc(tech(x.id || x)?.name)}">${x.id || x}${f ? ` <small>${LABEL[x.from]} → ${LABEL[x.to]}</small>` : ''}</span>`).join('') || `<span class="mut">${t('Aucune.')}</span>`;
@@ -115,7 +123,7 @@ export function render(root) {
   <div class="bar"><button id="snap">${t('Figer un instantané')}</button>${snaps.length ? `<label for="cmp" style="margin:0">${t('Comparer avec')}</label><select id="cmp" style="width:auto"><option value="none">${t('Aucune comparaison')}</option>${snaps.map(x => `<option value="${x.id}" ${D?.snap === x ? 'selected' : ''}>${esc(x.label)} (${fmt(x.date)}, ${x.pct}%)</option>`).join('')}</select><button id="snapdel" ${D ? '' : 'disabled'}>${t('Supprimer cet instantané')}</button>` : ''}</div>
   ${evo}
   <h2>${t('Couverture par scénario')}</h2><table><thead><tr><th>${t('Scénario')}</th><th>${t('Couverture')}</th><th>${t('Techniques')}</th></tr></thead><tbody>${rowsHtml || `<tr><td colspan=3 class="mut">${t('Aucun scénario')}</td></tr>`}</tbody></table>
-  <h2>${t('Écarts priorisés')}</h2><table><thead><tr><th>${t('Technique')}</th><th>${t('Statut')}</th><th>${t('Scénarios concernés')}</th><th>${t('Sources de données (ATT&CK)')}</th></tr></thead><tbody>${gapRows || `<tr><td colspan=4 class="mut">${t('Aucun écart')}</td></tr>`}</tbody></table>
+  <h2>${t('Écarts priorisés')}</h2><table><thead><tr><th>${t('Technique')}</th><th>${t('Statut')}</th><th>${t('Scénarios concernés')}</th><th>${t('Sources de données (ATT&CK)')}</th><th></th></tr></thead><tbody id="gaps">${gapRows || `<tr><td colspan=5 class="mut">${t('Aucun écart')}</td></tr>`}</tbody></table>
   ${srcRows ? `<h2>${t('Sources de données à prioriser')}</h2><p class="mut">${t('Composants de données ATT&CK nécessaires pour détecter les écarts, classés par nombre d’écarts et priorité des scénarios. À confronter aux journaux réellement collectés.')}</p>
   <table><thead><tr><th>${t('Composant de données')}</th><th>${t('Écarts')}</th><th>${t('Priorité max.')}</th><th>${t('Techniques concernées')}</th></tr></thead><tbody>${srcRows}</tbody></table>` : ''}`;
 
@@ -149,8 +157,42 @@ export function render(root) {
     const d = $(root, '#detail');
     d.innerHTML = `<button class="x" aria-label="${t('Fermer')}">×</button><h3>${id} ${esc(te.name)}</h3>
       <p><span class="tag ${st[0]}">${st[1]}</span> <a href="https://attack.mitre.org/techniques/${id}/" target="_blank" rel="noopener">${t('Fiche MITRE')}</a></p>
-      <h4>${t('Règles')} (${e ? e.items.length : 0})</h4>${rules}<h4>${t('Scénarios')} (${scs.length})</h4>${scn}<h4>${t('Sources de données (ATT&CK)')}</h4>${sourcesOf(id).map(c => `<div class="item"><a href="https://attack.mitre.org/datacomponents/${c.id}/" target="_blank" rel="noopener">${c.id}</a> ${esc(c.name)}</div>`).join('') || `<p class="mut">${t('Aucune stratégie de détection MITRE pour cette technique.')}</p>`}<h4>${t('Sous-techniques ({n}/{m} couvertes)', { n: subs.filter(x => (cm.get(x.id)?.exact || 0) >= 2).length, m: subs.length })}</h4>${sub}`;
+      <h4>${t('Règles')} (${e ? e.items.length : 0})</h4>${rules}<h4>${t('Scénarios')} (${scs.length})</h4>${scn}<h4>${t('Sources de données (ATT&CK)')}</h4>${sourcesOf(id).map(c => `<div class="item"><a href="https://attack.mitre.org/datacomponents/${c.id}/" target="_blank" rel="noopener">${c.id}</a> ${esc(c.name)}</div>`).join('') || `<p class="mut">${t('Aucune stratégie de détection MITRE pour cette technique.')}</p>`}<h4>${t('Sous-techniques ({n}/{m} couvertes)', { n: subs.filter(x => (cm.get(x.id)?.exact || 0) >= 2).length, m: subs.length })}</h4>${sub}
+      ${k !== 'cov' ? `<div class="bar"><button data-draft="${id}">${t('Ébaucher une règle Sigma (IA)')}</button></div>` : ''}`;
     d.classList.add('open'); $(d, '.x').focus();
+  }
+  /** Ébauche de règle Sigma pour une technique non couverte : générée par l'IA, ajoutée en confiance basse (la technique reste partielle tant que la règle n'est pas validée). */
+  function draft(id) {
+    const te = tech(id), d = $(root, '#detail');
+    const scs = state.scenarios.filter(s => s.techniques.some(x => parentOf(x) === parentOf(id)));
+    d.innerHTML = `<button class="x" aria-label="${t('Fermer')}">×</button><h3>${t('Ébauche de règle Sigma')}</h3><p><b>${id}</b> ${esc(te?.name)}</p>
+      <p class="mut">${t('Générée par l’IA à partir de la technique, des scénarios concernés et des sources de données ATT&CK. À relire, tester et adapter avant tout déploiement. Ajoutée aux règles, elle reste en confiance basse : la technique passe en « partiel », pas en « couvert », tant que tu ne l’as pas validée.')}</p>
+      <div class="bar"><button id="sgo" class="pri">${t('Générer l’ébauche')}</button><span id="sst"></span></div><div id="sout"></div>`;
+    d.classList.add('open'); $(d, '.x').focus();
+    gateAI(d, ['#sgo'], '#sst');
+    $(d, '#sgo').onclick = () => run($(d, '#sst'), async (signal, say) => {
+      say(t('Appel LLM…'));
+      const existing = (cm.get(id)?.items || []).map(r => r.name);
+      const user = `Technique : ${id} ${te?.name} (tactiques : ${(te?.tactics?.length ? te.tactics : tech(parentOf(id))?.tactics || []).join(', ')})
+Sources de données ATT&CK utiles : ${sourcesOf(id).map(c => c.name).join(', ') || '(non précisé)'}
+Règles existantes sur cette technique (à ne pas dupliquer) : ${existing.join(' ; ') || '(aucune)'}
+Scénarios concernés :
+${fence('source', scs.map(s => `${sref(s)} ${s.name} : ${s.summary || ''}`).join('\n') || '(aucun)')}`;
+      const r = await chatJson({ system: SIGMA(), user, signal });
+      const y = typeof r?.sigma === 'string' ? r.sigma.slice(0, 20000) : '', notes = typeof r?.notes === 'string' ? r.notes.slice(0, 2000) : '';
+      if (!/^\s*title\s*:/m.test(y) || !/^\s*detection\s*:/m.test(y)) throw new Error(t('Réponse inexploitable : pas de règle Sigma (title, detection).'));
+      $(d, '#sout').innerHTML = `<pre>${esc(y)}</pre>${notes ? `<p class="mut">${esc(notes)}</p>` : ''}
+        <div class="bar"><button id="sadd" class="pri">${t('Ajouter aux règles (à valider)')}</button><button id="scopy">${t('Copier')}</button></div>`;
+      $(d, '#scopy').onclick = () => navigator.clipboard?.writeText(y);
+      $(d, '#sadd').onclick = () => {
+        const techs = validate([id, ...extractTechniques(y)]).ok, P = new Set(techs.map(parentOf));
+        const rule = { id: uid(), name: (y.match(/^title\s*:\s*['"]?(.+?)['"]?\s*$/m)?.[1] || id).slice(0, 200), source: t('ébauche IA'), body: y, techniques: techs,
+          scenarios: state.scenarios.filter(s => s.techniques.some(x => P.has(parentOf(x)))).map(s => s.id), why: {}, reviewed: false, tags: extractTechniques(y), by: 'ia', tagDiff: null,
+          stage: '', confidence: 'low', note: t('Ébauche générée par l’IA pour combler un écart : à relire, tester et valider.') + (notes ? ' ' + notes : ''), mapped: true };
+        undoable(t('Règle « {name} » ajoutée (confiance basse, à valider dans Règles).', { name: rule.name }), () => { state.rules.push(rule); save(); render(root); });
+      };
+      return t('Ébauche générée : relis-la avant de l’ajouter.');
+    });
   }
 
   $(root, '#q').value = view.q; $(root, '#msc').value = view.sc; $(root, '#mshow').value = view.show;
@@ -159,9 +201,11 @@ export function render(root) {
   $(root, '#mshow').onchange = e => { view.show = e.target.value; drawMatrix(); };
   let opened = '';
   // fermeture du volet : le focus revient sur la cellule d'origine (navigation clavier)
-  const close = () => { $(root, '#detail').classList.remove('open'); root.querySelector(`.cell[data-id="${opened}"]`)?.focus(); };
-  $(root, '#matrix').onclick = e => { const c = e.target.closest('.cell'); if (c) openDetail(opened = c.dataset.id); };
-  $(root, '#detail').onclick = e => { if (e.target.classList.contains('x')) close(); };
+  let opener = null;
+  const close = () => { $(root, '#detail').classList.remove('open'); (opener?.isConnected ? opener : root.querySelector(`.cell[data-id="${opened}"]`))?.focus(); };
+  $(root, '#matrix').onclick = e => { const c = e.target.closest('.cell'); if (c) { opener = c; openDetail(opened = c.dataset.id); } };
+  $(root, '#detail').onclick = e => { if (e.target.classList.contains('x')) close(); else if (e.target.dataset.draft) draft(e.target.dataset.draft); };
+  $(root, '#gaps').onclick = e => { const b = e.target.closest('[data-draft]'); if (b) { opener = b; draft(b.dataset.draft); } };
   root.onkeydown = e => { if (e.key === 'Escape' && $(root, '#detail').classList.contains('open')) close(); };
   drawMatrix();
   $(root, '#snap').onclick = () => {

@@ -33,6 +33,15 @@ for (const r of bundle.objects) if (r.type === 'relationship' && r.relationship_
   revoked.set(ref(byId.get(r.source_ref)), ref(byId.get(r.target_ref)));
 const moved = {};
 for (const [from] of revoked) { let to = from, n = 0; while (revoked.has(to) && n++ < 10) to = revoked.get(to); if (live_.has(to) && !live_.has(from)) moved[from] = to; }
+// Groupes (intrusion sets) : nom, alias, techniques utilisées (index dans techniques[])
+const tIdx = new Map(techniques.map((t, i) => [t.id, i])), uses = new Map();
+for (const r of bundle.objects) if (r.type === 'relationship' && r.relationship_type === 'uses' && live(r) && r.source_ref.startsWith('intrusion-set--') && r.target_ref.startsWith('attack-pattern--')) {
+  const i = tIdx.get(ref(byId.get(r.target_ref)));
+  if (i !== undefined) (uses.get(r.source_ref) || uses.set(r.source_ref, new Set()).get(r.source_ref)).add(i);
+}
+const groups = bundle.objects.filter(o => o.type === 'intrusion-set' && live(o)).map(o => ({
+  id: ref(o), name: o.name, aka: (o.aliases || []).filter(a => a !== o.name).slice(0, 6), t: [...(uses.get(o.id) || [])].sort((a, b) => a - b),
+})).sort((a, b) => a.id.localeCompare(b.id));
 const version = bundle.objects.find(o => o.type === 'x-mitre-collection')?.x_mitre_version;
-writeFileSync(new URL('../data/attack.json', import.meta.url), JSON.stringify({ version, tactics, techniques, components: components.map(({ id, name }) => ({ id, name })), moved }));
-console.log(version, tactics.length, techniques.length, 'composants de données :', components.length, 'IDs révoqués convertis :', Object.keys(moved).length);
+writeFileSync(new URL('../data/attack.json', import.meta.url), JSON.stringify({ version, tactics, techniques, components: components.map(({ id, name }) => ({ id, name })), moved, groups }));
+console.log(version, tactics.length, techniques.length, 'composants de données :', components.length, 'IDs révoqués convertis :', Object.keys(moved).length, 'groupes :', groups.length);
