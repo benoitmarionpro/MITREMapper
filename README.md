@@ -17,7 +17,7 @@ L'IA propose, vous validez. Tout tourne dans votre navigateur : pas de serveur, 
 
 ## Langue
 
-Le bouton **EN / FR** en haut à droite bascule toute l'interface (écrans, messages, rapport client, classeur Excel, couches Navigator) entre français et anglais ; le choix est mémorisé dans le navigateur. En anglais, l'IA rédige aussi les scénarios et justifications en anglais. Les données déjà saisies (et la démo, rédigée en français) ne sont pas traduites.
+Le bouton **EN / FR** en haut à droite bascule toute l'interface (écrans, messages, rapport client, classeur Excel, couches Navigator) entre français et anglais ; le choix est mémorisé dans le navigateur. En anglais, l'IA rédige aussi les scénarios et justifications en anglais. Les données déjà saisies ne sont pas traduites ; les exemples et la démo existent dans les deux langues (chargés dans la langue de l'interface).
 
 ## 1. Configurer le LLM (onglet Paramètres)
 
@@ -95,7 +95,7 @@ Pour une démo rapide :
 - **Scénarios → Charger l'exemple** : remplit le profil client et le rapport CTI d'exemple ; il reste à cliquer sur Générer.
 - **Règles → Charger les règles d'exemple** : ajoute 7 règles Sigma (5 avec tags ATT&CK, mappées sans IA ; 2 sans tag, pour l'IA) ; il reste à cliquer sur Mapper.
 
-Les fichiers sont dans `data/sample/` (`cti.txt`, `rules.yml`, `project.json`).
+Les fichiers sont dans `data/sample/` (`cti.txt`, `rules.yml`, `project.json`, et leurs versions anglaises `cti.en.txt`, `project.en.json`).
 
 ## Développement
 
@@ -105,7 +105,7 @@ Les fichiers sont dans `data/sample/` (`cti.txt`, `rules.yml`, `project.json`).
 
 ## Mettre à jour le référentiel ATT&CK
 
-`node tools/build-attack.mjs [version]` régénère `data/attack.json` (ATT&CK Enterprise, version 19.2 par défaut : changer de version est un choix explicite, car les identifiants évoluent d'une version à l'autre). Le fichier contient les techniques, les tactiques et, pour chaque technique, les composants de données de ses stratégies de détection MITRE.
+`node tools/build-attack.mjs [version]` régénère `data/attack.json` (ATT&CK Enterprise, version 20.1 par défaut : changer de version est un choix explicite, car les identifiants évoluent d'une version à l'autre). Le fichier contient les techniques, les tactiques, pour chaque technique les composants de données de ses stratégies de détection MITRE, et la table des identifiants révoqués : un ancien identifiant (ex. `T1562.001`, remplacé par `T1685` en v19) proposé par l'IA, présent dans une règle ou dans un projet enregistré est converti automatiquement au lieu d'être rejeté.
 
 ## Limites
 

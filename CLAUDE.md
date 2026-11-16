@@ -29,8 +29,8 @@ Le LLM fait le gros du travail ; l'utilisateur relit et corrige. Les IDs ATT&CK 
 | `js/settings.js` | Configuration LLM, étapes de stratégie, import/export projet |
 | `js/i18n.js` | `t()`, `lang`, `locale`, `setLang`, dictionnaire `EN` |
 | `js/ui.js` | Helpers (`esc`, `run` avec annulation, lecture de fichiers) |
-| `data/attack.json` | Référentiel ATT&CK Enterprise compact, **généré** : `techniques[{id,name,tactics,dc[]}]` (`dc` = index dans `components[{id:'DC0032',name}]`, composants de données des stratégies de détection MITRE ; lire via `sourcesOf()`) |
-| `tools/build-attack.mjs` | Régénère `data/attack.json` depuis le STIX officiel (`node tools/build-attack.mjs [version] [stix-local]`, version figée à 19.2 par défaut : monter de version est une décision explicite) |
+| `data/attack.json` | Référentiel ATT&CK Enterprise compact, **généré** : `techniques[{id,name,tactics,dc[]}]` (`dc` = index dans `components[{id:'DC0032',name}]`, composants de données des stratégies de détection MITRE ; lire via `sourcesOf()`), `moved{ancienId: idActuel}` (IDs révoqués) |
+| `tools/build-attack.mjs` | Régénère `data/attack.json` depuis le STIX officiel (`node tools/build-attack.mjs [version] [stix-local]`, version figée à 20.1 par défaut : monter de version est une décision explicite) |
 | `tools/build-standalone.mjs` | Génère `dist/mitremapper.html`, fichier unique sans serveur (mini-bundler : un module = une fonction ; ne pas utiliser de `export` hors `export const/let/function/class NOM` en début de ligne ni de live binding, ex. `attack` est un objet partagé) |
 | `data/sample/` | CTI, règles Sigma et `project.json` (démo complète déjà mappée, chargée par `loadDemo()` dans `store.js`) |
 | `test.html` | Tests (parse JSON, IDs, tags, liens, CYBAIMaker, couverture, références) : ouvrir via le serveur local ; met `document.title` à `PASS n` / `FAIL n` ; sauvegarde et restaure le localStorage |
@@ -59,7 +59,8 @@ Règle de couverture (`coverage.js`, `status(coverageMap(), id)`) : *couverte* s
 - Contenus analysés (CTI, règles) envoyés au LLM entre balises via `fence()` + consigne `UNTRUSTED` (`llm.js`) : ce sont des données, jamais des instructions. Toute troncature (`MAX_CTI`, `MAX_RULE`) est signalée à l'utilisateur.
 - Tout projet importé passe par `sanitize()` (`store.js`) : champs connus seulement, typés et bornés, identifiants régénérés (ils sont insérés dans le HTML), techniques validées. Ajouter un champ au modèle = l'ajouter aussi dans `sanitize()`, sinon il est perdu à l'import.
 - Exports CSV : préfixer `'` les cellules commençant par `= + - @` (injection de formule).
-- Le référentiel ATT&CK évolue (v19 a scindé Defense Evasion en Stealth + Defense Impairment) : ne pas coder en dur la liste des tactiques, elle vient de `attack.json`.
+- Le référentiel ATT&CK évolue (v19 a scindé Defense Evasion en Stealth + Defense Impairment) : ne pas coder en dur la liste des tactiques, elle vient de `attack.json`. Les IDs révoqués (`attack.moved`) sont convertis par `validate()` / `current()`, et les projets enregistrés par `upgradeIds()` (au démarrage et dans `loadInto`). Le prompt reçoit le catalogue complet, sous-techniques comprises (`promptCatalog()`).
+- Démo et exemples bilingues : `sample(f)` charge `cti.en.txt` / `project.en.json` en anglais ; toute modification de `project.json` doit être reportée dans `project.en.json` (mêmes IDs et liens).
 - Vérifier après modification : `node --check js/*.js`, ouvrir `test.html`, tester sur l'exemple de `data/sample/`, régénérer `dist/mitremapper.html` et l'ouvrir en `file://`.
 
 ## Hors périmètre actuel

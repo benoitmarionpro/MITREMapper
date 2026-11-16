@@ -1,15 +1,15 @@
 import { state, save, uid, sample, sref, sanitize } from './store.js';
 import { chatJson, fence, UNTRUSTED } from './llm.js';
-const MAX_CTI = 60000; // ponytail: troncature simple, découpage en plusieurs appels si les sources dépassent souvent
 import { validate, promptCatalog } from './attack.js';
 import { esc, $, readFiles, run, gateAI, undoable } from './ui.js';
 import { t, lang, locale } from './i18n.js';
+const MAX_CTI = 60000; // ponytail: troncature simple, découpage en plusieurs appels si les sources dépassent souvent
 
 const SYSTEM = () => `Tu es un analyste CTI senior. À partir du profil client et des extraits de rapports de menace, tu déduis les scénarios de menace les plus pertinents à couvrir en détection.
 Réponds en JSON : {"scenarios":[{"name":"","actors":"","summary":"","techniques":["T1566.001"],"priority":"high|medium|low","rationale":""}]}
 Règles : ${lang === 'en' ? 'rédige tous les textes (name, actors, summary, rationale) EN ANGLAIS' : 'rédige tout en français'} ; 5 à 15 scénarios, concrets et distincts ; techniques = IDs ATT&CK Enterprise existants (techniques ou sous-techniques), 4 à 12 par scénario, ordonnées selon la kill chain ; priority selon la probabilité et l'impact pour CE client ; répartis les priorités (au plus la moitié en high) ; préfère les sous-techniques précises quand la source les justifie.
 ${UNTRUSTED}
-Techniques parentes de référence :\n`;
+`;
 
 export function render(root) {
   const c = state.client;

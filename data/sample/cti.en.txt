@@ -1,0 +1,5 @@
+Threat report (sample) - Healthcare sector, Europe
+
+Ransomware operators target hospitals and clinic groups. Initial access is gained through spearphishing with attachments (macros, ISO/LNK) or by exploiting unpatched exposed VPNs/firewalls. Attackers use valid accounts bought from initial access brokers.
+After access: PowerShell execution, Cobalt Strike deployment, LSASS dumping (Mimikatz), Kerberoasting, lateral movement via RDP and PsExec/SMB, EDR tampering and shadow copy deletion (vssadmin), exfiltration to cloud storage (Rclone/MEGA) before encrypting ESXi servers and file shares.
+In addition, state-sponsored espionage campaigns target medical research: software supply chain compromise, web shells on exposed Exchange servers, persistence through scheduled tasks and slow exfiltration over HTTPS.

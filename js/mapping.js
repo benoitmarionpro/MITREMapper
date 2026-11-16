@@ -15,7 +15,7 @@ Réponds en JSON : {"results":[{"i":0,"techniques":["T1059.001"],"scenarios":[{"
 - why et note : ${lang === 'en' ? 'rédigés EN ANGLAIS' : 'rédigés en français'}.
 - ${UNTRUSTED}
 Scénarios :\n${scenarios.map(s => `${sref(s)} ${s.name} [${s.techniques.join(',')}]`).join('\n') || '(aucun)'}
-Techniques parentes de référence :\n${promptCatalog()}`;
+${promptCatalog()}`;
 
 /** IDs ATT&CK déclarés dans la règle, sans IA : tags Sigma (attack.t1059.001), champs MITRE des exports Sentinel/Splunk/Elastic (T1059…). Validés contre le référentiel. */
 export const extractTechniques = body => validate((String(body).match(/\bT\d{4}(?:\.\d{3})?\b/gi) || [])).ok;

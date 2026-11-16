@@ -29,7 +29,7 @@ for (const name of order) {
 }
 
 const attack = JSON.parse(read('data/attack.json'));
-const samples = Object.fromEntries(['cti.txt', 'rules.yml', 'project.json'].map(f => [f, read('data/sample/' + f)]));
+const samples = Object.fromEntries(['cti.txt', 'cti.en.txt', 'rules.yml', 'project.json', 'project.en.json'].map(f => [f, read('data/sample/' + f)]));
 const script = `const __m = {};\nglobalThis.__ATTACK__ = ${JSON.stringify(attack)};\nglobalThis.__SAMPLES__ = ${JSON.stringify(samples)};\n${bundle}`.replace(/<\/script/gi, '<\\/script');
 
 // polices embarquées en data URI (le fichier unique ne peut pas référencer ../fonts/)

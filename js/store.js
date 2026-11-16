@@ -1,6 +1,6 @@
 import { setKey } from './keys.js';
 import { t, lang } from './i18n.js';
-import { validate } from './attack.js';
+import { validate, current } from './attack.js';
 const KEY = 'mitremapper.v1';                         // projet courant + réglages
 const LIB = 'mitremapper.lib', LIBP = 'mitremapper.lib.'; // index des projets + données de chaque projet (sans réglages)
 export const DEFAULT_STAGES = lang === 'en' ? ['Prevention', 'Detection', 'Investigation', 'Response'] : ['Prévention', 'Détection', 'Investigation', 'Réponse'];
@@ -52,10 +52,18 @@ try {
 save(); // migration (références, bibliothèque de projets) idempotente
 
 /** Remplace le contenu du projet courant (même objet `state`), en conservant les réglages. */
+/** IDs ATT&CK révoqués depuis l'enregistrement du projet -> IDs actuels (sans perte : un ID inconnu est conservé tel quel). */
+export function upgradeIds(d) {
+  const up = a => Array.isArray(a) ? [...new Set(a.map(current))] : a;
+  for (const s of d.scenarios || []) s.techniques = up(s.techniques);
+  for (const r of d.rules || []) { r.techniques = up(r.techniques); r.tags = up(r.tags); if (r.tagDiff) for (const k of ['tags', 'ia']) r.tagDiff[k] = up(r.tagDiff[k]); }
+  for (const x of d.snapshots || []) x.st = Object.fromEntries(Object.entries(x.st || {}).map(([k, v]) => [current(k), v]));
+  return d;
+}
 function loadInto(d) {
   const keep = state.settings;
   for (const k of Object.keys(state)) delete state[k];
-  Object.assign(state, fresh(), d, { settings: keep });
+  Object.assign(state, fresh(), upgradeIds(d), { settings: keep });
   save();
 }
 // ponytail: une seule action annulable (la dernière), historique complet si le besoin apparaît
@@ -123,7 +131,8 @@ export function importProject(text, name) {
   const d = sanitize(JSON.parse(text));
   loadInto({ ...d, pid: uid(), name: d.name && !['Projet sans nom', 'Untitled project'].includes(d.name) ? d.name : name || t('Projet importé') });
 }
-/** Charge un fichier de data/sample/ (démos rapides). */
-export const sample = f => globalThis.__SAMPLES__?.[f] != null ? Promise.resolve(globalThis.__SAMPLES__[f]) : fetch('data/sample/' + f, { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(t('Exemple introuvable : {f}', { f })); return r.text(); });
+/** Charge un fichier de data/sample/ (démos rapides) ; en anglais, sa version .en quand elle existe (CTI et projet de démo). */
+const EN_SAMPLES = { 'cti.txt': 'cti.en.txt', 'project.json': 'project.en.json' };
+export const sample = (f, x = lang === 'en' && EN_SAMPLES[f] || f) => globalThis.__SAMPLES__?.[x] != null ? Promise.resolve(globalThis.__SAMPLES__[x]) : fetch('data/sample/' + x, { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(t('Exemple introuvable : {f}', { f })); return r.text(); });
 /** Démo complète sans LLM (scénarios + règles déjà mappés), ouverte dans un nouveau projet. */
 export const loadDemo = async () => importProject(await sample('project.json'), t('Démo : établissement de santé'));

@@ -1,5 +1,6 @@
 import { loadAttack, attack } from './attack.js';
 import { showProject } from './ui.js';
+import { state, save, upgradeIds } from './store.js';
 import { t, lang, setLang } from './i18n.js';
 import * as settings from './settings.js';
 import * as scenarios from './scenarios.js';
@@ -26,6 +27,7 @@ lb.textContent = lang === 'en' ? 'FR' : 'EN';
 lb.title = lang === 'en' ? 'Passer l’interface en français' : 'Switch the interface to English';
 lb.onclick = () => { setLang(lang === 'en' ? 'fr' : 'en'); location.reload(); };
 await loadAttack();
+upgradeIds(state); save(); // projet enregistré avec une version précédente d'ATT&CK : IDs révoqués convertis
 document.getElementById('ver').textContent = `ATT&CK Enterprise v${attack.version}`;
 const h = decodeURIComponent(location.hash.slice(1));
 show(views[h] ? h : legacy[h] || 'settings');
