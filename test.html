@@ -126,6 +126,16 @@ const bf = await readFiles([bz], RULE_EXT), br = bf.flatMap(f => parseRuleFile(f
 t('import en masse : zip deflate lu, extensions filtrées', bf.length === 7 && !bf.some(f => f.name.endsWith('.png')) && bf[0].name.startsWith('rules-bulk.zip/'));
 t('import en masse : config et README ignorés, Sentinel ARM et savedsearches.conf découpés', br.length === 6 && new Set(br.map(r => r.body)).size === 5
   && br.filter(r => r.source.endsWith('export.json')).map(r => r.name).join() === 'LSASS access,Unsigned scheduled task' && br.find(r => r.source.endsWith('.conf'))?.name === 'ESCU - Ransomware note created');
+// --- Règles : case d'en-tête « tout valider » (règles affichées) ---
+{
+  const { render: renderRules } = await import('./js/mapping.js'), ru0 = state.rules, box = document.createElement('div');
+  state.rules = [{ id: 'a', name: 'a', source: '', body: 'x', techniques: [], scenarios: [], reviewed: true }, { id: 'b', name: 'b', source: '', body: 'y', techniques: [], scenarios: [], reviewed: false }];
+  document.body.append(box); renderRules(box);
+  const all = box.querySelector('#revall'), ind = all.indeterminate && !all.checked;
+  all.checked = true; all.dispatchEvent(new Event('change', { bubbles: true }));
+  t('Règles : case d’en-tête partielle, puis valide toutes les règles affichées', ind && state.rules.every(r => r.reviewed) && box.querySelector('#revall').checked);
+  box.remove(); document.getElementById('toast')?.remove(); state.rules = ru0;
+}
 // --- tâches : panneau, une seule par clé, état repris par attach() ---
 const { run: runT, attach, tasks } = await import('./js/ui.js');
 let finish; const s1 = document.createElement('span'), s2 = document.createElement('span'); document.body.append(s1, s2);

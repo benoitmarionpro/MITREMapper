@@ -136,15 +136,19 @@ export function render(root) {
   const sc = () => state.scenarios, rule = id => state.rules.find(r => r.id === id);
   const chips = (ids, rm) => ids.map(id => `<span class="tag" title="${esc(tech(id)?.name || '')}">${id}${rm ? `<button class="rmt" data-rmt="${id}" aria-label="${t('Retirer {id}', { id })}">×</button>` : ''}</span>`).join('');
 
+  let shown = []; // règles affichées (filtre + recherche) : cible de la case « tout valider »
   function draw() {
     const q = view.q.trim().toLowerCase(), S = sc();
     $(root, '#n').textContent = state.rules.length;
     $(root, '#prog').textContent = t('{n}/{m} validées', { n: state.rules.filter(r => r.reviewed).length, m: state.rules.length });
     $(root, '#flt').innerHTML = Object.entries(FILTERS).map(([f, l]) => `<button class="lg flt ${view.f === f ? 'on' : ''}" aria-pressed="${view.f === f}" data-f="${f}">${l} ${f === 'all' ? state.rules.length : state.rules.filter(r => flags(r)[f]).length}</button>`).join('');
-    $(root, '#head').innerHTML = `<tr><th></th><th>${t('Règle')}</th><th>${t('Techniques')}</th>${S.map(s => `<th class="sc ${view.hl === s.id ? 'hl' : ''}" data-hl="${s.id}"><button class="scb" aria-pressed="${view.hl === s.id}" title="${t('{name} ({prio}) : trier par ce scénario', { name: esc(s.name), prio: esc(s.priority) })}"><span class="tag sref">${sref(s)}</span></button></th>`).join('')}</tr>`;
+    $(root, '#head').innerHTML = `<tr><th><input type="checkbox" id="revall" aria-label="${t('Valider toutes les règles affichées')}" title="${t('Valider toutes les règles affichées')}"></th><th>${t('Règle')}</th><th>${t('Techniques')}</th>${S.map(s => `<th class="sc ${view.hl === s.id ? 'hl' : ''}" data-hl="${s.id}"><button class="scb" aria-pressed="${view.hl === s.id}" title="${t('{name} ({prio}) : trier par ce scénario', { name: esc(s.name), prio: esc(s.priority) })}"><span class="tag sref">${sref(s)}</span></button></th>`).join('')}</tr>`;
     const list = state.rules.filter(r => (view.f === 'all' || flags(r)[view.f])
       && (!q || (r.name + ' ' + r.source + ' ' + r.techniques.map(x => x + ' ' + (tech(x)?.name || '')).join(' ')).toLowerCase().includes(q)));
     if (view.hl) list.sort((a, b) => b.scenarios.includes(view.hl) - a.scenarios.includes(view.hl));
+    shown = list;
+    const all = $(root, '#revall'), nRev = list.filter(r => r.reviewed).length;
+    Object.assign(all, { checked: !!list.length && nRev === list.length, indeterminate: nRev > 0 && nRev < list.length, disabled: !list.length });
     $(root, '#rows').innerHTML = list.map(r => `<tr data-id="${r.id}" class="${view.sel === r.id ? 'sel' : ''}">
       <td><input type="checkbox" data-rev ${r.reviewed ? 'checked' : ''} aria-label="${t('Règle validée')}"></td>
       <td><button class="rn" aria-label="${t('Détail de la règle')} : ${esc(r.name)}">${esc(r.name)}</button><div class="mut">${esc(r.source)}${r.confidence ? ' · ' + esc(r.confidence) : ''}${r.stage ? ' · ' + esc(r.stage) : ''}${r.by ? ' · ' + (r.by === 'tags' ? t('via tags') : t('via IA')) : ''}</div></td>
@@ -186,6 +190,11 @@ export function render(root) {
   $(root, '#q').value = view.q;
   $(root, '#q').oninput = e => { view.q = e.target.value; draw(); };
   $(root, '#flt').onclick = e => { const f = e.target.closest('[data-f]')?.dataset.f; if (f) { view.f = f; draw(); } };
+  $(root, '#head').onchange = e => {
+    if (e.target.id !== 'revall') return;
+    const v = e.target.checked, list = shown;
+    undoable(t(v ? '{n} règle(s) validée(s).' : '{n} règle(s) remise(s) à relire.', { n: list.length }), () => { list.forEach(r => r.reviewed = v); save(); draw(); });
+  };
   $(root, '#head').onclick = e => { const h = e.target.closest('[data-hl]')?.dataset.hl; if (h) { view.hl = view.hl === h ? '' : h; draw(); } };
   $(root, '#rows').onclick = e => {
     const tr = e.target.closest('tr[data-id]'); if (!tr) return;
