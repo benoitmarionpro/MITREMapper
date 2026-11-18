@@ -118,7 +118,8 @@ td select{min-width:7.5rem}td input[type=checkbox]{width:auto}td label{display:i
 #detail pre{background:var(--ink-50);border:1px solid var(--line);border-radius:8px;padding:.6rem;font:12px/1.5 ui-monospace,Consolas,monospace;white-space:pre-wrap;max-height:16rem;overflow:auto}
 #detail .item button{margin-top:.3rem;padding:2px 10px;font-size:12px}
 details#imp summary{cursor:pointer;margin:.4rem 0}
-@media(min-width:1100px){main:has(#detail.open){padding-right:420px}}
+/* volet ouvert : le contenu garde son bord gauche et s'étend jusqu'au volet (fixé au bord de la fenêtre), sans le vide laissé par le centrage */
+@media(min-width:1100px){main:has(#detail.open){width:auto;max-width:none;margin:0 0 0 max(0px,calc((100% - 1280px) / 2));padding-right:420px}}
 label.chk{display:flex;gap:.5rem;align-items:flex-start;margin:.5rem 0;font-weight:500;color:var(--fg)}
 label.chk input{width:auto;min-height:0;margin-top:.2rem}
 .pill{font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;background:var(--ink-100);color:var(--mut)}
