@@ -1,7 +1,7 @@
 import { state, save, uid, sample, sref, sanitize } from './store.js';
 import { chatJson, fence, UNTRUSTED } from './llm.js';
 import { validate, promptCatalog, group, groupTechs, groupCatalog, validateGroups, tech, parentOf } from './attack.js';
-import { esc, $, readFiles, run, gateAI, undoable } from './ui.js';
+import { esc, $, readFiles, run, gateAI, undoable, attach, onTab } from './ui.js';
 import { t, lang, locale } from './i18n.js';
 /** La citation (evidence) figure-t-elle dans la CTI ? Comparaison tolérante (casse, espaces, apostrophes) ; « … » sépare plusieurs extraits. */
 export function citeOk(evidence, cti) {
@@ -35,6 +35,7 @@ export function render(root) {
   <div class="bar"><label style="margin:0">${t('Ajouter des fichiers texte')} <input id="files" type="file" multiple accept=".txt,.md,.json,.csv,.html" style="width:auto"></label>
     <button id="demo">${t('Charger l’exemple')}</button><button id="gen" class="pri">${t('Générer les scénarios')}</button><label style="margin:0"><input id="repl" type="checkbox" style="width:auto"> ${t('remplacer l’existant')}</label><span id="st"></span></div>
   <h2>${t('Scénarios')} (<span id="n"></span>)</h2><div id="list"></div><button id="add">${t('+ Scénario manuel')}</button>`;
+  attach($(root, '#st'), 'scen', [$(root, '#gen')]); // génération lancée avant un changement d'onglet
   gateAI(root, ['#gen'], '#st');
   for (const k of Object.keys(c)) { const el = $(root, '#' + k); el.value = c[k]; el.onchange = () => { c[k] = el.value; save(); }; }
   const cti = $(root, '#cti'), ctin = $(root, '#ctin');
@@ -96,16 +97,17 @@ export function render(root) {
   $(root, '#add').onclick = () => { state.scenarios.push({ id: uid(), name: t('Nouveau scénario'), priority: 'medium', techniques: [] }); save(); draw(); };
   $(root, '#gen').onclick = () => run($(root, '#st'), async (signal, say) => {
     if (!state.cti.trim()) throw new Error(t('Ajoute du contenu CTI.'));
+    const repl = $(root, '#repl').checked; // lu avant l'appel : l'onglet a pu changer à la réponse
     say(t('Appel LLM…'));
     const user = `Profil client : ${JSON.stringify(c)}\n\nSources CTI :\n${fence('source', state.cti.slice(0, MAX_CTI))}`;
     const r = await chatJson({ system: SYSTEM() + promptCatalog(), user, signal });
     const raw = [r.scenarios || r].flat().filter(s => s && typeof s === 'object');
     // sortie LLM = donnée non fiable : même nettoyage qu'un import (champs connus, typés, techniques validées)
     const out = sanitize({ scenarios: raw.map(s => ({ ...s, ref: undefined, rejected: validate(Array.isArray(s.techniques) ? s.techniques : []).rejected })), rules: [] }).scenarios;
-    const add = () => { state.scenarios = $(root, '#repl').checked ? out : [...state.scenarios, ...out]; save(); draw(); };
-    if ($(root, '#repl').checked) undoable(t('Scénarios existants remplacés.'), add); else add();
+    const add = () => { state.scenarios = repl ? out : [...state.scenarios, ...out]; save(); if (onTab('scenarios')) draw(); };
+    if (repl) undoable(t('Scénarios existants remplacés.'), add); else add();
     const n = state.cti.length;
     return n > MAX_CTI ? t('{k} scénario(s) générés. Attention : CTI tronquée, {max} caractères analysés sur {n}.', { k: out.length, max: MAX_CTI.toLocaleString(locale), n: n.toLocaleString(locale) }) : t('{k} scénario(s) générés.', { k: out.length });
-  }, [$(root, '#gen')]);
+  }, [$(root, '#gen')], { key: 'scen', label: t('Génération des scénarios'), open: () => document.querySelector('#tabs [data-id="scenarios"]')?.click() });
   draw();
 }

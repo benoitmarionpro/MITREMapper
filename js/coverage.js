@@ -3,7 +3,7 @@ import { attack, parentOf, tech, sourcesOf, validate } from './attack.js';
 import { chatJson, fence, UNTRUSTED } from './llm.js';
 import { extractTechniques, mapRules, focusRule } from './mapping.js';
 import { reportHtml, workbook, layer, layersZip } from './export.js';
-import { esc, $, showProject, undoable, run, gateAI } from './ui.js';
+import { esc, $, showProject, undoable, run, gateAI, attach, tasks, onTab } from './ui.js';
 import { t, lang, locale } from './i18n.js';
 
 const RANK = { low: 1, medium: 2, high: 3 };
@@ -84,8 +84,11 @@ Réponds en JSON : {"sigma":"<règle YAML complète>","notes":""}
 - notes : ${lang === 'en' ? 'EN ANGLAIS' : 'en français'}, 2 à 4 phrases : journaux requis, hypothèses, faux positifs attendus, comment tester.
 - ${UNTRUSTED}`;
 const SHOW = { all: t('Toutes les techniques'), scenario: t('Techniques des scénarios'), gap: t('Écarts uniquement'), cov: t('Couvertes uniquement') };
-const view = { q: '', sc: '', show: 'all', cmp: '' }; // filtres conservés tant que la page est ouverte ; cmp : '' = dernier instantané, 'none' = sans comparaison
+const view = { q: '', sc: '', show: 'all', cmp: '', reopen: '' }; // filtres conservés tant que la page est ouverte ; cmp : '' = dernier instantané, 'none' = sans comparaison
 
+const drafts = {}; // technique → { y, notes } : ébauche générée, gardée tant que la page est ouverte (retirée une fois ajoutée aux règles)
+let reopen = () => {}; // draft() du dernier rendu : une tâche finie redessine le volet courant, pas celui d'un rendu disparu
+const shown = id => { const d = document.getElementById('detail'); return onTab('coverage') && d?.classList.contains('open') && d.dataset.draft === id; };
 export function render(root) {
   const cm = coverageMap();
   const parents = attack.techniques.filter(x => !x.id.includes('.'));
@@ -159,8 +162,8 @@ export function render(root) {
     d.innerHTML = `<button class="x" aria-label="${t('Fermer')}">×</button><h3>${id} ${esc(te.name)}</h3>
       <p><span class="tag ${st[0]}">${st[1]}</span> <a href="https://attack.mitre.org/techniques/${id}/" target="_blank" rel="noopener">${t('Fiche MITRE')}</a></p>
       <h4>${t('Règles')} (${e ? e.items.length : 0})</h4>${rules}<h4>${t('Scénarios')} (${scs.length})</h4>${scn}<h4>${t('Sources de données (ATT&CK)')}</h4>${sourcesOf(id).map(c => `<div class="item"><a href="https://attack.mitre.org/datacomponents/${c.id}/" target="_blank" rel="noopener">${c.id}</a> ${esc(c.name)}</div>`).join('') || `<p class="mut">${t('Aucune stratégie de détection MITRE pour cette technique.')}</p>`}<h4>${t('Sous-techniques ({n}/{m} couvertes)', { n: subs.filter(x => (cm.get(x.id)?.exact || 0) >= 2).length, m: subs.length })}</h4>${sub}
-      ${k !== 'cov' ? `<div class="bar"><button data-draft="${id}">${t('Ébaucher une règle Sigma (IA)')}</button></div>` : ''}`;
-    d.classList.add('open'); $(d, '.x').focus();
+      ${k !== 'cov' || drafts[id] || busy(id) ? `<div class="bar"><button data-draft="${id}">${busy(id) ? t('Voir l’ébauche en cours') : drafts[id] ? t('Voir l’ébauche générée') : t('Ébaucher une règle Sigma (IA)')}</button></div>` : ''}`;
+    d.dataset.draft = ''; d.classList.add('open'); $(d, '.x').focus();
   }
   /** Après l'ajout d'une ébauche (page réaffichée) : volet de confirmation, avec accès à la règle dans l'onglet Règles pour la relire et la valider. */
   function draftDone(rule) {
@@ -169,18 +172,29 @@ export function render(root) {
       <p><span class="tag part">${t('Confiance basse : à valider')}</span> ${rule.techniques.map(x => `<span class="tag">${x}</span>`).join('')}</p>
       <h4>${t('Scénarios liés')} (${names.length})</h4>${names.map(s => `<div class="item"><span class="tag sref">${sref(s)}</span> ${esc(s.name)}<div class="mut">${esc(rule.why?.[s.id] || '')}</div></div>`).join('') || `<p class="mut">${t('Aucun scénario lié.')}</p>`}
       <div class="bar"><button id="gorule" class="pri">${t('Relire et valider dans Règles')}</button></div>`;
-    d.classList.add('open'); $(d, '#gorule').focus();
+    d.dataset.draft = ''; d.classList.add('open'); $(d, '#gorule').focus();
     $(d, '#gorule').onclick = () => { focusRule(rule.id); document.querySelector('#tabs [data-id="rules"]')?.click(); };
   }
-  /** Ébauche de règle Sigma pour une technique non couverte : générée par l'IA, ajoutée en confiance basse (la technique reste partielle tant que la règle n'est pas validée). */
-  function draft(id) {
-    const te = tech(id), d = $(root, '#detail');
+  const busy = id => ['draft:', 'add:'].some(k => tasks.get(k + id)?.state === 'run');
+  /** Ébauche de règle Sigma pour une technique non couverte : générée par l'IA, ajoutée en confiance basse (la technique reste partielle tant que la règle n'est pas validée).
+   *  Le volet reprend l'état à chaque ouverture : tâche en cours (attach), ébauche déjà générée (drafts). */
+  function draft(id, focus = true) {
+    const te = tech(id), d = $(root, '#detail'), dr = drafts[id];
+    // ébauches déjà ajoutées (lues dans les règles : survit au rechargement et à l'annulation)
+    const prev = state.rules.filter(r => r.source === t('ébauche IA') && r.techniques.includes(id));
     const scs = state.scenarios.filter(s => s.techniques.some(x => parentOf(x) === parentOf(id)));
+    const open = () => { view.reopen = id; document.querySelector('#tabs [data-id="coverage"]')?.click(); };
+    d.dataset.draft = id;
     d.innerHTML = `<button class="x" aria-label="${t('Fermer')}">×</button><h3>${t('Ébauche de règle Sigma')}</h3><p><b>${id}</b> ${esc(te?.name)}</p>
       <p class="mut">${t('Générée par l’IA à partir de la technique, des scénarios concernés et des sources de données ATT&CK. À relire, tester et adapter avant tout déploiement. Ajoutée aux règles, elle reste en confiance basse : la technique passe en « partiel », pas en « couvert », tant que tu ne l’as pas validée.')}</p>
-      <div class="bar"><button id="sgo" class="pri">${t('Générer l’ébauche')}</button><span id="sst"></span></div><div id="sout"></div>`;
-    d.classList.add('open'); $(d, '.x').focus();
-    gateAI(d, ['#sgo'], '#sst');
+      ${prev.length ? `<h4>${t('Déjà ajoutée(s) aux règles ({n})', { n: prev.length })}</h4>${prev.map(r => `<div class="item"><b>${esc(r.name)}</b> <span class="tag ${r.reviewed ? 'cov' : 'part'}">${r.reviewed ? t('Validée') : t('Confiance basse : à valider')}</span>
+        <div class="bar"><button data-rule="${r.id}">${t('Relire et valider dans Règles')}</button></div></div>`).join('')}
+        <p class="mut">${t('Une nouvelle ébauche n’a d’intérêt que pour une détection complémentaire (autre source de données, autre variante de la technique). Sinon, relis et valide la règle existante dans Règles.')}</p>` : ''}
+      <div class="bar"><button id="sgo" class="${prev.length && !dr ? '' : 'pri'}">${dr ? t('Régénérer') : prev.length ? t('Générer une autre ébauche') : t('Générer l’ébauche')}</button><span id="sst"></span></div>
+      <div id="sout">${dr ? `<pre>${esc(dr.y)}</pre>${dr.notes ? `<p class="mut">${esc(dr.notes)}</p>` : ''}
+        <div class="bar"><button id="sadd" class="pri">${t('Ajouter aux règles (à valider)')}</button><button id="scopy">${t('Copier')}</button><span id="sast" role="status"></span></div>` : ''}</div>`;
+    d.classList.add('open'); if (focus) $(d, '.x').focus();
+    d.querySelectorAll('[data-rule]').forEach(b => b.onclick = () => { focusRule(b.dataset.rule); document.querySelector('#tabs [data-id="rules"]')?.click(); });
     $(d, '#sgo').onclick = () => run($(d, '#sst'), async (signal, say) => {
       say(t('Appel LLM…'));
       const existing = (cm.get(id)?.items || []).map(r => r.name);
@@ -192,27 +206,40 @@ ${fence('source', scs.map(s => `${sref(s)} ${s.name} : ${s.summary || ''}`).join
       const r = await chatJson({ system: SIGMA(), user, signal });
       const y = typeof r?.sigma === 'string' ? r.sigma.slice(0, 20000) : '', notes = typeof r?.notes === 'string' ? r.notes.slice(0, 2000) : '';
       if (!/^\s*title\s*:/m.test(y) || !/^\s*detection\s*:/m.test(y)) throw new Error(t('Réponse inexploitable : pas de règle Sigma (title, detection).'));
-      $(d, '#sout').innerHTML = `<pre>${esc(y)}</pre>${notes ? `<p class="mut">${esc(notes)}</p>` : ''}
-        <div class="bar"><button id="sadd" class="pri">${t('Ajouter aux règles (à valider)')}</button><button id="scopy">${t('Copier')}</button><span id="sast" role="status"></span></div>`;
-      $(d, '#scopy').onclick = () => navigator.clipboard?.writeText(y);
+      drafts[id] = { y, notes };
+      if (shown(id)) reopen(id, false);
+      return t('Ébauche générée ci-dessous : relis-la, puis ajoute-la aux règles.');
+    }, [$(d, '#sgo')], { key: 'draft:' + id, label: t('Ébauche Sigma {id}', { id }), open, keep: true });
+    if (dr) {
+      $(d, '#scopy').onclick = () => navigator.clipboard?.writeText(dr.y);
       // Ajout = mapping réel (même pipeline que l'onglet Règles : tags puis relecture IA), puis confiance basse forcée : une ébauche ne compte pas comme couverte avant validation.
       $(d, '#sadd').onclick = () => run($(d, '#sast'), async (signal, say) => {
         say(t('Intégration de la règle…'));
-        const rule = { id: uid(), name: (y.match(/^title\s*:\s*['"]?(.+?)['"]?\s*$/m)?.[1] || id).slice(0, 200), source: t('ébauche IA'), body: y,
+        const g = tasks.get('draft:' + id); if (g) g.hidden = true; // l'ébauche est prise en charge : sa ligne « à relire » n'a plus lieu d'être
+        const y = dr.y, rule = { id: uid(), name: (y.match(/^title\s*:\s*['"]?(.+?)['"]?\s*$/m)?.[1] || id).slice(0, 200), source: t('ébauche IA'), body: y,
           techniques: [], scenarios: [], why: {}, reviewed: false, tags: [...new Set([id, ...extractTechniques(y)])], tagDiff: null, stage: '', confidence: 'low', note: '', mapped: false };
         let warn = '';
         try { await mapRules([rule], { verify: true, signal, say: () => say(t('Mise à jour de la cartographie MITRE…')) }); }
         catch (e) { if (e.name === 'AbortError') throw e; warn = t('Relecture IA impossible ({e}) : liens établis par les tags seulement.', { e: e.message }); }
         if (!rule.techniques.includes(id)) rule.techniques = validate([id, ...rule.techniques]).ok; // la règle a été écrite pour cet écart
-        Object.assign(rule, { confidence: 'low', reviewed: false, note: [t('Ébauche générée par l’IA pour combler un écart : à relire, tester et valider.'), notes, rule.note].filter(Boolean).join(' ') });
+        Object.assign(rule, { confidence: 'low', reviewed: false, note: [t('Ébauche générée par l’IA pour combler un écart : à relire, tester et valider.'), dr.notes, rule.note].filter(Boolean).join(' ') });
         const msg = t('Règle « {name} » ajoutée et mappée : {n} scénario(s) lié(s){stage} ; confiance basse jusqu’à validation dans Règles.', { name: rule.name, n: rule.scenarios.length, stage: rule.stage ? t(', étape {s}', { s: rule.stage }) : '' });
-        undoable(warn ? `${msg} ${warn}` : msg, () => { state.rules.push(rule); save(); render(root); });
-        draftDone(rule);
+        const was = shown(id);
+        delete drafts[id];
+        // l'onglet a pu changer pendant l'appel : on ne redessine la Couverture que si elle est affichée
+        undoable(warn ? `${msg} ${warn}` : msg, () => { state.rules.push(rule); save(); if (onTab('coverage')) render(root); });
+        if (was) draftDone(rule);
         return msg;
-      }, [$(d, '#sadd'), $(d, '#sgo'), $(d, '#scopy')]);
-      return t('Ébauche générée : relis-la avant de l’ajouter.');
-    }, [$(d, '#sgo')]);
+      }, [$(d, '#sadd'), $(d, '#sgo'), $(d, '#scopy')], { key: 'add:' + id, label: t('Ajout de l’ébauche {id}', { id }), open });
+    }
+    // reprise de l'état : génération, puis ajout (qui grise aussi #sgo), puis autorisation IA
+    // le message « générée » d'une ébauche déjà ajoutée (ou annulée) n'a plus de sens : seul l'état en cours ou une erreur est repris
+    const g = tasks.get('draft:' + id);
+    if (g && (dr || g.state !== 'ok')) attach($(d, '#sst'), 'draft:' + id, [$(d, '#sgo')]);
+    if (dr) attach($(d, '#sast'), 'add:' + id, [$(d, '#sadd'), $(d, '#sgo'), $(d, '#scopy')]);
+    gateAI(d, ['#sgo'], '#sst');
   }
+  reopen = draft;
 
   $(root, '#q').value = view.q; $(root, '#msc').value = view.sc; $(root, '#mshow').value = view.show;
   $(root, '#q').oninput = e => { view.q = e.target.value; drawMatrix(); };
@@ -227,6 +254,7 @@ ${fence('source', scs.map(s => `${sref(s)} ${s.name} : ${s.summary || ''}`).join
   $(root, '#gaps').onclick = e => { const b = e.target.closest('[data-draft]'); if (b) { opener = b; draft(b.dataset.draft); } };
   root.onkeydown = e => { if (e.key === 'Escape' && $(root, '#detail').classList.contains('open')) close(); };
   drawMatrix();
+  if (view.reopen) { const id = view.reopen; view.reopen = ''; draft(id); } // bouton « Afficher » du panneau des tâches
   if (unmapped) $(root, '#gomap').onclick = () => document.querySelector('#tabs [data-id="rules"]')?.click();
   $(root, '#snap').onclick = () => {
     const label = prompt(t('Nom de l’instantané'), t('Instantané du {date}', { date: new Date().toLocaleDateString(locale) }));

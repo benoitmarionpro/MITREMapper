@@ -2,7 +2,7 @@ import { state, save, uid, sample, sref } from './store.js';
 import { chatJson, fence, UNTRUSTED } from './llm.js';
 const MAX_RULE = 3000; // caractères d'une règle envoyés au LLM
 import { attack, tech, validate, parentOf, promptCatalog } from './attack.js';
-import { esc, $, readFiles, run, undoable } from './ui.js';
+import { esc, $, readFiles, run, undoable, attach, onTab } from './ui.js';
 import { isAuthorized } from './keys.js';
 import { t, lang } from './i18n.js';
 
@@ -35,17 +35,29 @@ const fromTags = (r, tags, S) => {
 };
 
 /** Découpe un texte collé en règles (séparateur : ligne '---' ou '==='). */
-const splitRules = (name, text) => text.split(/^\s*(?:---|===)\s*$/m).map(x => x.trim()).filter(Boolean).map(body => ({
-  id: uid(), source: name, body, name: (body.match(/^title:\s*(.+)$/mi) || body.match(/^(.{1,80})/))[1].trim(),
-  techniques: [], scenarios: [], stage: '', confidence: '', mapped: false,
-}));
-function fromJson(name, text) {
-  try {
-    const d = JSON.parse(text);
-    if (Array.isArray(d)) return d.map(o => ({ ...splitRules(name, JSON.stringify(o, null, 1))[0], name: String(o.name || o.title || o.rule_name || o.id || t('règle')) }));
-  } catch {}
-  return splitRules(name, text);
+const mk = (source, body, name) => ({ id: uid(), source, body, techniques: [], scenarios: [], stage: '', confidence: '', mapped: false,
+  name: String(name || (body.match(/^title:\s*(.+)$/mi) || body.match(/^(?:name|displayName):\s*(.+)$/mi) || body.match(/^(.{1,80})/))[1]).trim().slice(0, 200) });
+const splitRules = (name, text) => text.split(/^\s*(?:---|===)\s*$/m).map(x => x.trim()).filter(Boolean).map(body => mk(name, body));
+/** Règles d'un fichier : JSON (tableau, template ARM Sentinel, export REST Splunk, objet seul), savedsearches.conf Splunk, sinon
+ *  texte découpé par ---. bulk (dossier, zip) : les documents YAML sans detection/query/search (config) sont ignorés. */
+export function parseRuleFile(name, text, bulk = false) {
+  const ext = name.toLowerCase().match(/\.[^./]*$/)?.[0];
+  if (bulk && /(^|\/)(readme|changelog|license|contributing)[^/]*$/i.test(name)) return [];
+  if (ext === '.json') {
+    let d; try { d = JSON.parse(text); } catch { return splitRules(name, text); }
+    const items = Array.isArray(d) ? d : Array.isArray(d?.resources) ? d.resources.map(x => x?.properties).filter(Boolean)
+      : Array.isArray(d?.entry) ? d.entry.map(x => ({ name: x?.name, ...x?.content })) : [d];
+    return items.filter(o => o && typeof o === 'object').map(o => mk(name, JSON.stringify(o, null, 1), o.displayName || o.name || o.title || o.rule_name || o.id || t('règle')));
+  }
+  if (ext === '.conf') { // [stanza] … search = …
+    const p = text.split(/^\[([^\]\n]+)\]\s*$/m), out = [];
+    for (let i = 1; i < p.length; i += 2) if (p[i] !== 'default' && /^\s*search\s*=/m.test(p[i + 1])) out.push(mk(name, `[${p[i]}]\n${p[i + 1].trim()}`, p[i]));
+    return out;
+  }
+  const r = splitRules(name, text);
+  return bulk && /^\.ya?ml$/.test(ext) ? r.filter(x => /^\s*(?:detection|query|search)\s*:/m.test(x.body)) : r;
 }
+export const RULE_EXT = ['.yml', '.yaml', '.json', '.txt', '.md', '.kql', '.spl', '.csv', '.conf'];
 
 /** Techniques de la règle qui recoupent celles du scénario (comparaison au niveau technique parente). */
 export const common = (r, s) => {
@@ -106,8 +118,9 @@ export function render(root) {
   <details id="imp" ${state.rules.length ? '' : 'open'}><summary><b>${t('Importer des règles')}</b></summary>
     <textarea id="paste" placeholder="${t('Coller des règles ou de la documentation. Séparer plusieurs règles par une ligne --- (YAML Sigma multi-documents OK).')}"></textarea>
     <div class="bar"><button id="demo">${t('Charger les règles d’exemple')}</button><button id="addp">${t('Ajouter le texte collé')}</button>
-      <label style="margin:0">${t('Ou fichiers')} <input id="files" type="file" multiple style="width:auto" accept=".yml,.yaml,.json,.txt,.md,.kql,.spl,.csv"></label>
-      <span class="mut">${t('Un fichier = une ou plusieurs règles (séparateur ---) ; un .json contenant un tableau = une règle par élément.')}</span></div>
+      <label style="margin:0">${t('Ou fichiers')} <input id="files" type="file" multiple style="width:auto" accept="${RULE_EXT.join(',')},.zip"></label>
+      <label style="margin:0">${t('Ou dossier')} <input id="dir" type="file" webkitdirectory style="width:auto"></label><span id="ist"></span>
+      <span class="mut">${t('Un fichier = une ou plusieurs règles (séparateur ---) ; .zip et dossiers lus en entier ; JSON (tableau, export Sentinel ARM, export REST Splunk) = une règle par élément ; savedsearches.conf Splunk = une règle par recherche. Les doublons sont ignorés.')}</span></div>
   </details>
   <div class="bar"><button id="map" class="pri">${t('Mapper les règles non traitées')}</button><button id="remap">${t('Tout remapper')}</button><span id="st"></span></div>
   <label class="chk"><input type="checkbox" id="verify"> ${t('Faire aussi relire par l’IA les règles qui ont des tags ATT&amp;CK (détecte les divergences entre tags déclarés et logique de la règle)')}</label>
@@ -119,6 +132,7 @@ export function render(root) {
   <aside id="detail" role="region" aria-label="${t('Détail de la règle')}"></aside><datalist id="techlist">${attack.techniques.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</datalist>`;
 
   if (!isAuthorized()) $(root, '#st').innerHTML = `<span class="mut">${t('IA non autorisée : seules les règles avec tags ATT&amp;CK seront mappées (autorisation dans Paramètres).')}</span>`;
+  attach($(root, '#st'), 'map', [$(root, '#map'), $(root, '#remap')]); // mapping lancé avant un changement d'onglet
   const sc = () => state.scenarios, rule = id => state.rules.find(r => r.id === id);
   const chips = (ids, rm) => ids.map(id => `<span class="tag" title="${esc(tech(id)?.name || '')}">${id}${rm ? `<button class="rmt" data-rmt="${id}" aria-label="${t('Retirer {id}', { id })}">×</button>` : ''}</span>`).join('');
 
@@ -207,18 +221,25 @@ export function render(root) {
 
   $(root, '#demo').onclick = async () => { state.rules.push(...splitRules(t('exemple.yml'), await sample('rules.yml'))); save(); draw(); };
   $(root, '#addp').onclick = () => { const p = $(root, '#paste'); state.rules.push(...splitRules(t('collé'), p.value)); p.value = ''; save(); draw(); };
-  $(root, '#files').onchange = async e => {
-    for (const f of await readFiles(e.target.files)) state.rules.push(...(f.name.endsWith('.json') ? fromJson(f.name, f.text) : splitRules(f.name, f.text)));
-    e.target.value = ''; save(); draw();
-  };
+  const importFiles = e => run($(root, '#ist'), async () => {
+    const list = [...e.target.files], bulk = list.length > 1 || list.some(f => f.webkitRelativePath || /\.zip$/i.test(f.name));
+    e.target.value = '';
+    const files = await readFiles(list, RULE_EXT), seen = new Set(state.rules.map(r => r.body));
+    let n = 0, d = 0;
+    for (const f of files) for (const r of parseRuleFile(f.name, f.text, bulk)) seen.has(r.body) ? d++ : (seen.add(r.body), state.rules.push(r), n++);
+    save(); draw();
+    return t('{n} règle(s) importée(s) depuis {f} fichier(s) ; {d} doublon(s) ignoré(s).', { n, f: files.length, d });
+  });
+  $(root, '#files').onchange = importFiles;
+  $(root, '#dir').onchange = importFiles;
   const go = all => run($(root, '#st'), async (signal, say) => {
     const todo0 = state.rules.filter(r => all || !r.mapped);
     if (!todo0.length) throw new Error(t('Rien à mapper.'));
-    const { nTags, nAI, cut } = await mapRules(todo0, { verify: $(root, '#verify').checked, signal, say, onBatch: () => { save(); draw(); } });
+    const { nTags, nAI, cut } = await mapRules(todo0, { verify: $(root, '#verify').checked, signal, say, onBatch: () => { save(); if (onTab('rules')) draw(); } });
     if (!nAI) return t('{n} règle(s) mappée(s) depuis leurs tags, sans IA.', { n: nTags });
     return t('{n} règle(s) mappée(s) depuis leurs tags ; {m} règle(s) traitée(s) par l’IA.', { n: nTags, m: nAI })
       + (cut ? ' ' + t('Attention : {k} règle(s) trop longue(s), seuls les {max} premiers caractères ont été analysés.', { k: cut, max: MAX_RULE }) : '');
-  }, [$(root, '#map'), $(root, '#remap')]);
+  }, [$(root, '#map'), $(root, '#remap')], { key: 'map', label: t('Mapping des règles'), open: () => document.querySelector('#tabs [data-id="rules"]')?.click() });
   $(root, '#map').onclick = () => go(false);
   $(root, '#remap').onclick = () => undoable(t('Remappage de toutes les règles lancé (les corrections manuelles seront remplacées).'), () => go(true));
   draw();

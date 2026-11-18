@@ -117,6 +117,29 @@ t('évolution : écart → couvert détecté, +1 couverte, +33 pts', D.better.le
 state.scenarios = sc1; state.rules = ru1;
 const zb = new Uint8Array(await zip({ 'a.txt': 'abc' }).arrayBuffer());
 t('zip : en-tête local et fin de répertoire central', zb[0] === 0x50 && zb[1] === 0x4b && zb[2] === 3 && new DataView(zb.buffer).getUint32(zb.length - 22, true) === 0x06054b50);
+// --- import en masse : zip (stocké et deflate), Sentinel, Splunk ---
+const { unzip, readFiles } = await import('./js/ui.js'), { parseRuleFile, RULE_EXT } = await import('./js/mapping.js');
+t('unzip : relit une archive stockée de zip()', (await unzip(zip({ 'a.txt': 'abc', 'd/b.yml': 'é' }))).map(e => e.name + '=' + e.text).join() === 'a.txt=abc,d/b.yml=é');
+// pas de Blob : sous --virtual-time-budget (CI), sa lecture asynchrone se bloque parfois ; readFiles/unzip n'utilisent que name et arrayBuffer() d'un .zip
+const zbuf = await (await fetch('data/sample/rules-bulk.zip', { cache: 'no-cache' })).arrayBuffer(), bz = { name: 'rules-bulk.zip', arrayBuffer: async () => zbuf };
+const bf = await readFiles([bz], RULE_EXT), br = bf.flatMap(f => parseRuleFile(f.name, f.text, true));
+t('import en masse : zip deflate lu, extensions filtrées', bf.length === 7 && !bf.some(f => f.name.endsWith('.png')) && bf[0].name.startsWith('rules-bulk.zip/'));
+t('import en masse : config et README ignorés, Sentinel ARM et savedsearches.conf découpés', br.length === 6 && new Set(br.map(r => r.body)).size === 5
+  && br.filter(r => r.source.endsWith('export.json')).map(r => r.name).join() === 'LSASS access,Unsigned scheduled task' && br.find(r => r.source.endsWith('.conf'))?.name === 'ESCU - Ransomware note created');
+// --- tâches : panneau, une seule par clé, état repris par attach() ---
+const { run: runT, attach, tasks } = await import('./js/ui.js');
+let finish; const s1 = document.createElement('span'), s2 = document.createElement('span'); document.body.append(s1, s2);
+let calls = 0;
+const p1 = runT(s1, () => (calls++, new Promise(r => finish = r)), [], { key: 'test', label: 'Tâche test' });
+runT(s1, async () => { calls++; }, [], { key: 'test', label: 'Tâche test' });
+const tray = document.getElementById('tasks');
+t('tâches : panneau affiché, double lancement ignoré', !!tray && !tray.hidden && tray.textContent.includes('Tâche test') && calls === 1);
+attach(s2, 'test');
+t('tâches : attach() reprend la roue sur un écran redessiné', !!s2.querySelector('.spin'));
+finish('fini'); await p1;
+t('tâches : fin repeinte sur l’écran rattaché', s2.textContent === 'fini' && tasks.get('test').state === 'ok' && attach(s1, 'test') && s1.textContent === 'fini');
+tasks.delete('test'); s1.remove(); s2.remove(); tray.remove();
+t('import en masse : techniques des exports lues sans IA', ['T1059.001', 'T1003.001', 'T1053', 'T1486'].every(id => br.some(r => extractTechniques(r.body).includes(id))));
 // --- import : fichier non fiable nettoyé ---
 const { sanitize } = await import('./js/store.js');
 const evil = sanitize({ scenarios: [{ id: '"><img src=x onerror=alert(1)>', name: 'S', priority: '<b>', techniques: ['T1059', 'T9999', 42] }],
