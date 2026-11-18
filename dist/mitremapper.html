@@ -56,6 +56,9 @@ button:disabled,button:disabled:hover{opacity:.5;cursor:not-allowed;box-shadow:n
 #tasks .task{display:flex;gap:.5rem;align-items:center;padding:.5rem .6rem .5rem .8rem;border-radius:var(--radius);background:var(--surface);border:1px solid var(--line-strong);border-left:3px solid var(--acc);box-shadow:var(--shadow);font-size:12.5px}
 #tasks .task>span{flex:1;min-width:0}#tasks .task.ok{border-left-color:var(--green-700)}#tasks .task.err{border-left-color:var(--red)}#tasks .task.err>span{color:var(--red)}
 #tasks button{padding:.2rem .55rem;font-size:12px}
+/* volet de détail ouvert : le panneau des tâches ne doit pas masquer ses boutons du bas → à gauche du volet s'il y a la place, sinon marge en bas du volet */
+@media(min-width:1100px){body:has(#detail.open) #tasks{right:calc(380px + 1.25rem)}}
+@media(max-width:1099px){body:has(#tasks:not([hidden])) #detail{padding-bottom:10rem}}
 @media(max-width:700px){#tasks{left:1rem;right:1rem;bottom:4.5rem;max-width:none}}
 @keyframes spin{to{transform:rotate(360deg)}}
 textarea{min-height:8rem;font:12px/1.5 ui-monospace,Consolas,monospace}
